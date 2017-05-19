@@ -19,6 +19,7 @@ class SaveTrajectories
 {
 public:
     SaveTrajectories()
+        : m_sizeWrited(false), m_delim(",")
     {
 
     }
@@ -32,14 +33,27 @@ public:
         {
             m_file.open(fileName.c_str(), std::ios_base::out | std::ios_base::trunc);
         }
+        if (m_file.is_open())
+        {
+            m_sizeWrited = false;
+        }
         return m_file.is_open();
+    }
+
+    bool WriteFrameSize(int frame_width, int frame_height)
+    {
+        if (m_file.is_open() && !m_sizeWrited)
+        {
+            m_file << frame_width << m_delim << frame_height << std::endl;
+            m_sizeWrited = true;
+        }
+        return m_sizeWrited;
     }
 
     bool NewTrack(const CTrack& track)
     {
         if (m_file.is_open())
         {
-            std::string delim = ",";
             int type = 2;
 
             if (track.IsRobust(25, 0.7, cv::Size2f(0.9f, 4.0f)))
@@ -48,13 +62,13 @@ public:
                 {
                     const TrajectoryPoint& pt = track.m_trace.at(j);
 
-                    m_file << pt.m_frameInd << delim
-                           << track.m_trackID << delim
-                           << type << delim
-                           << pt.m_prediction.x << delim
-                           << pt.m_prediction.y << delim
-                           << (static_cast<track_t>(pt.m_size.width) / static_cast<track_t>(pt.m_size.height))<< delim
-                           << pt.m_time << delim
+                    m_file << pt.m_frameInd << m_delim
+                           << track.m_trackID << m_delim
+                           << type << m_delim
+                           << pt.m_prediction.x << m_delim
+                           << pt.m_prediction.y << m_delim
+                           << (static_cast<track_t>(pt.m_size.width) / static_cast<track_t>(pt.m_size.height))<< m_delim
+                           << pt.m_time << m_delim
                            << (j + 1) << std::endl;
                 }
             }
@@ -65,6 +79,8 @@ public:
 
 private:
     std::ofstream m_file;
+    bool m_sizeWrited;
+    std::string m_delim;
 };
 #endif
 

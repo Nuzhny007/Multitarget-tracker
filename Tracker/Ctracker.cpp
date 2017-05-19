@@ -60,6 +60,9 @@ void CTracker::Update(
         )
 {
     int64 currTime = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+#if SAVE_TRAJECTORIES
+    m_saveTraj.WriteFrameSize(grayFrame.cols, grayFrame.rows);
+#endif
 
     TKalmanFilter::KalmanType kalmanType = (m_kalmanType == KalmanLinear) ? TKalmanFilter::TypeLinear : TKalmanFilter::TypeUnscented;
 
