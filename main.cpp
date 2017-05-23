@@ -228,7 +228,7 @@ void MotionDetector(cv::CommandLineParser parser)
     //detector.SetMinObjectSize(cv::Size(gray.cols / 50, gray.rows / 50));
     detector.SetMinObjectSize(cv::Size(2, 2));
 
-    std::string trajectoryFileName = inFile + ".txt";
+    std::string trajectoryFileName = inFile + "_" + parser.get<std::string>("start_frame") + ".txt";
 
     CTracker tracker(useLocalTracking,
                      CTracker::RectsDist,
