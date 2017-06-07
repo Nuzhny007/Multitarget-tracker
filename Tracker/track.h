@@ -426,8 +426,8 @@ private:
                 if (dataCorrect)
                 {
                     cv::Rect prect(
-                                (m_boundidgRect.x + region.m_obj.GetLeft()) / 2,
-                                (m_boundidgRect.y + region.m_obj.GetTop()) / 2,
+                                (m_boundidgRect.x + region.m_obj.Left()) / 2,
+                                (m_boundidgRect.y + region.m_obj.Top()) / 2,
                                 (m_boundidgRect.width + region.m_obj.Width()) / 2,
                                 (m_boundidgRect.height + region.m_obj.Height()) / 2);
 
