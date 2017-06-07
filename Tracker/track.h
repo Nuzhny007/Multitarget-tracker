@@ -163,12 +163,12 @@ private:
 ///
 /// \brief The CTrack class
 ///
+template<typename REG_T>
 class CTrack
 {
 public:
     ///
     /// \brief CTrack
-    /// \param pt
     /// \param region
     /// \param deltaTime
     /// \param accelNoiseMag
@@ -176,34 +176,32 @@ public:
     /// \param filterObjectSize
     /// \param externalTrackerForLost
     ///
-    CTrack(
-            const Point_t& pt,
-            const CRegion& region,
-            TKalmanFilter::KalmanType kalmanType,
-            track_t deltaTime,
-            track_t accelNoiseMag,
-            size_t trackID,
-            bool filterObjectSize,
-            bool externalTrackerForLost
-            )
-		:
-        m_trackID(trackID),
-        m_skippedFrames(0),
-        m_lastRegion(region),
-        m_predictionPoint(pt),
-        m_filterObjectSize(filterObjectSize),
-        m_externalTrackerForLost(externalTrackerForLost)
-	{
+    CTrack(const REG_T& region,
+           TKalmanFilter::KalmanType kalmanType,
+           track_t deltaTime,
+           track_t accelNoiseMag,
+           size_t trackID,
+           bool filterObjectSize,
+           bool externalTrackerForLost
+           )
+        :
+          m_trackID(trackID),
+          m_skippedFrames(0),
+          m_lastRegion(region),
+          m_predictionPoint(region.m_obj.Center()),
+          m_filterObjectSize(filterObjectSize),
+          m_externalTrackerForLost(externalTrackerForLost)
+    {
         if (filterObjectSize)
         {
             m_kalman = new TKalmanFilter(kalmanType, region.m_rect, deltaTime, accelNoiseMag);
         }
         else
         {
-            m_kalman = new TKalmanFilter(kalmanType, pt, deltaTime, accelNoiseMag);
+            m_kalman = new TKalmanFilter(kalmanType, m_predictionPoint, deltaTime, accelNoiseMag);
         }
-        m_trace.push_back(pt, pt);
-	}
+        m_trace.push_back(m_predictionPoint, m_predictionPoint);
+    }
 
     ///
     /// \brief CalcDist
@@ -211,10 +209,10 @@ public:
     /// \return
     ///
     track_t CalcDist(const Point_t& pt)
-	{
+    {
         Point_t diff = m_predictionPoint - pt;
-		return sqrtf(diff.x * diff.x + diff.y * diff.y);
-	}
+        return sqrtf(diff.x * diff.x + diff.y * diff.y);
+    }
 
     ///
     /// \brief CalcDist
@@ -222,20 +220,20 @@ public:
     /// \return
     ///
     track_t CalcDist(const cv::Rect& r)
-	{
-		std::array<track_t, 4> diff;
+    {
+        std::array<track_t, 4> diff;
         diff[0] = m_predictionPoint.x - m_lastRegion.m_rect.width / 2 - r.x;
         diff[1] = m_predictionPoint.y - m_lastRegion.m_rect.height / 2 - r.y;
         diff[2] = static_cast<track_t>(m_lastRegion.m_rect.width - r.width);
         diff[3] = static_cast<track_t>(m_lastRegion.m_rect.height - r.height);
 
-		track_t dist = 0;
-		for (size_t i = 0; i < diff.size(); ++i)
-		{
-			dist += diff[i] * diff[i];
-		}
-		return sqrtf(dist);
-	}
+        track_t dist = 0;
+        for (size_t i = 0; i < diff.size(); ++i)
+        {
+            dist += diff[i] * diff[i];
+        }
+        return sqrtf(dist);
+    }
 
     ///
     /// \brief CalcOverlap
@@ -254,7 +252,6 @@ public:
 
     ///
     /// \brief Update
-    /// \param pt
     /// \param region
     /// \param dataCorrect
     /// \param max_trace_length
@@ -262,27 +259,26 @@ public:
     /// \param currFrame
     ///
     void Update(
-            const Point_t& pt,
-            const CRegion& region,
+            const REG_T& region,
             bool dataCorrect,
             size_t max_trace_length,
             cv::Mat prevFrame,
             cv::Mat currFrame
             )
-	{
+    {
         if (m_filterObjectSize) // Kalman filter for object coordinates and size
         {
             RectUpdate(region, dataCorrect, prevFrame, currFrame);
         }
         else // Kalman filter only for object center
         {
-            PointUpdate(pt, dataCorrect, currFrame.size());
+            PointUpdate(region.m_obj.Center(), dataCorrect, currFrame.size());
         }
 
         if (dataCorrect)
         {
             m_lastRegion = region;
-            m_trace.push_back(m_predictionPoint, pt);
+            m_trace.push_back(m_predictionPoint, region.m_obj.Center());
         }
         else
         {
@@ -324,7 +320,7 @@ public:
     Trace m_trace;
     size_t m_trackID;
     size_t m_skippedFrames;
-    CRegion m_lastRegion;
+    REG_T m_lastRegion;
     Point_t m_averagePoint;   ///< Average point after LocalTracking
     cv::Rect m_boundidgRect;  ///< Bounding rect after LocalTracking
 
@@ -333,7 +329,7 @@ public:
     /// \return
     ///
     cv::Rect GetLastRect() const
-	{
+    {
         if (m_filterObjectSize)
         {
             return m_predictionRect;
@@ -367,7 +363,7 @@ private:
     /// \param currFrame
     ///
     void RectUpdate(
-            const CRegion& region,
+            const REG_T& region,
             bool dataCorrect,
             cv::Mat prevFrame,
             cv::Mat currFrame

@@ -79,10 +79,10 @@ void MouseTracking(cv::CommandLineParser parser)
         pts.push_back(Point_t(Xmeasured + 100.0f*sin(alpha / 3.0f), Ymeasured + 100.0f*cos(alpha / 1.0f)));
         alpha += 0.05f;
 
-        regions_t regions;
-        for (auto p : pts)
+        point_regions_t regions;
+        for (auto pt : pts)
         {
-            regions.push_back(CRegion(cv::Rect(static_cast<int>(p.x - 1), static_cast<int>(p.y - 1), 3, 3)));
+            regions.push_back(regions::value_type(pt));
         }
 
 
@@ -91,7 +91,7 @@ void MouseTracking(cv::CommandLineParser parser)
             cv::circle(frame, pts[i], 3, cv::Scalar(0, 255, 0), 1, CV_AA);
         }
 
-        tracker.Update(pts, regions, cv::Mat());
+        tracker.Update(regions, cv::Mat());
 
         std::cout << tracker.tracks.size() << std::endl;
 
@@ -203,7 +203,7 @@ void MotionDetector(cv::CommandLineParser parser)
     // But on high resolution videos with many objects may be to slow
     bool useLocalTracking = false;
 
-    CDetector detector(BackgroundSubtract::ALG_MOG, useLocalTracking, gray);
+    CDetector<rect_regions_t> detector(BackgroundSubtract::ALG_MOG, useLocalTracking, gray);
     detector.SetMinObjectSize(cv::Size(minObjWidth, 2 * minObjWidth));
     //detector.SetMinObjectSize(cv::Size(2, 2));
 
@@ -253,10 +253,10 @@ void MotionDetector(cv::CommandLineParser parser)
 
         int64 t1 = cv::getTickCount();
 
-        const std::vector<Point_t>& centers = detector.Detect(gray);
-        const regions_t& regions = detector.GetDetects();
+        detector.Detect(gray);
+        const rect_regions_t& regions = detector.GetDetects();
 
-        tracker.Update(centers, regions, gray);
+        tracker.Update(regions, gray);
 
         int64 t2 = cv::getTickCount();
 
@@ -397,15 +397,14 @@ void FaceDetector(cv::CommandLineParser parser)
                                  findLargestObject ? cv::CASCADE_FIND_BIGGEST_OBJECT : 0,
                                  cv::Size(gray.cols / 20, gray.rows / 20),
                                  cv::Size(gray.cols / 2, gray.rows / 2));
-        std::vector<Point_t> centers;
-        regions_t regions;
+
+        rect_regions_t regions;
         for (auto rect : faceRects)
         {
-            centers.push_back((rect.tl() + rect.br()) / 2);
             regions.push_back(rect);
         }
 
-        tracker.Update(centers, regions, gray);
+        tracker.Update(regions, gray);
 
         int64 t2 = cv::getTickCount();
 
@@ -542,8 +541,7 @@ void PedestrianDetector(cv::CommandLineParser parser)
 
         int64 t1 = cv::getTickCount();
 
-        std::vector<Point_t> centers;
-        regions_t regions;
+        rect_regions_t regions;
 
         std::vector<cv::Rect> foundRects;
         std::vector<cv::Rect> filteredRects;
@@ -568,11 +566,10 @@ void PedestrianDetector(cv::CommandLineParser parser)
             rect.y += cvRound(rect.height * 0.07f);
             rect.height = cvRound(rect.height * 0.8f);
 
-            centers.push_back((rect.tl() + rect.br()) / 2);
             regions.push_back(rect);
         }
 
-        tracker.Update(centers, regions, gray);
+        tracker.Update(regions, gray);
 
         int64 t2 = cv::getTickCount();
 
@@ -731,15 +728,13 @@ void HybridFaceDetector(cv::CommandLineParser parser)
         std::vector<cv::Rect> allRects;
         nms2(faceRects, scores, allRects, 0.3f, 1, 0.7);
 
-        std::vector<Point_t> centers;
-        regions_t regions;
+        rect_regions_t regions;
         for (auto rect : allRects)
         {
-            centers.push_back((rect.tl() + rect.br()) / 2);
             regions.push_back(rect);
         }
 
-        tracker.Update(centers, regions, gray);
+        tracker.Update(regions, gray);
 
         int64 t2 = cv::getTickCount();
 
