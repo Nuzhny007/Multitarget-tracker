@@ -8,49 +8,85 @@
 #include "track.h"
 #include "LocalTracker.h"
 
-// ----------------------------------------------------------------------
+#include "HungarianAlg.h"
+
+#include <GTL/GTL.h>
+#include "mygraph.h"
+#include "mwbmatching.h"
+#include "tokenise.h"
+
+namespace TrackTypes
+{
+enum DistType
+{
+    DistCenters = 0,
+    DistRects = 1,
+    DistJaccard = 2
+};
+enum FilterGoal
+{
+    FilterCenter = 0,
+    FilterRect = 1
+};
+enum KalmanType
+{
+    KalmanLinear = 0,
+    KalmanUnscented = 1
+};
+enum MatchType
+{
+    MatchHungrian = 0,
+    MatchBipart = 1
+};
+enum LostTrackType
+{
+    TrackNone = 0,
+    TrackKCF = 1
+};
+}
+
+///
+/// \brief The CTracker class
+/// Tracker. Manage tracks. Create, remove, update.
+///
+template<typename REGION_T>
 class CTracker
 {
 public:
-    enum DistType
-    {
-        DistCenters = 0,
-        DistRects = 1,
-        DistJaccard = 2
-    };
-    enum FilterGoal
-    {
-        FilterCenter = 0,
-        FilterRect = 1
-    };
-    enum KalmanType
-    {
-        KalmanLinear = 0,
-        KalmanUnscented = 1
-    };
-    enum MatchType
-    {
-        MatchHungrian = 0,
-        MatchBipart = 1
-    };
-    enum LostTrackType
-    {
-        TrackNone = 0,
-        TrackKCF = 1
-    };
+    typedef std::vector<std::unique_ptr<CTrack<REGION_T>>> tracks_t;
 
     CTracker(bool useLocalTracking,
-             DistType distType,
-             KalmanType kalmanType,
-             FilterGoal filterGoal,
-             LostTrackType useExternalTrackerForLostObjects,
-             MatchType matchType,
+             TrackTypes::DistType distType,
+             TrackTypes::KalmanType kalmanType,
+             TrackTypes::FilterGoal filterGoal,
+             TrackTypes::LostTrackType useExternalTrackerForLostObjects,
+             TrackTypes::MatchType matchType,
              track_t dt_,
              track_t accelNoiseMag_,
              track_t dist_thres_ = 60,
              size_t maximum_allowed_skipped_frames_ = 10,
-             size_t max_trace_length_ = 10);
-    ~CTracker(void);
+             size_t max_trace_length_ = 10)
+        :
+          m_useLocalTracking(useLocalTracking),
+          m_distType(distType),
+          m_kalmanType(kalmanType),
+          m_filterGoal(filterGoal),
+          m_useExternalTrackerForLostObjects(useExternalTrackerForLostObjects),
+          m_matchType(matchType),
+          dt(dt_),
+          accelNoiseMag(accelNoiseMag_),
+          dist_thres(dist_thres_),
+          maximum_allowed_skipped_frames(maximum_allowed_skipped_frames_),
+          max_trace_length(max_trace_length_),
+          NextTrackID(0)
+    {
+
+    }
+
+    ~CTracker(void)
+    {
+
+    }
 
     tracks_t tracks;
 
@@ -63,7 +99,7 @@ public:
     void Update(const REGIONS_T& regions,
                 cv::Mat grayFrame)
     {
-        TKalmanFilter::KalmanType kalmanType = (m_kalmanType == KalmanLinear) ? TKalmanFilter::TypeLinear : TKalmanFilter::TypeUnscented;
+        TKalmanFilter::KalmanType kalmanType = (m_kalmanType == TrackTypes::KalmanLinear) ? TKalmanFilter::TypeLinear : TKalmanFilter::TypeUnscented;
 
         if (m_prevFrame.size() == grayFrame.size())
         {
@@ -81,13 +117,13 @@ public:
             // If no tracks yet
             for (size_t i = 0; i < regions.size(); ++i)
             {
-                tracks.push_back(std::make_unique<CTrack>(regions[i],
-                                                          kalmanType,
-                                                          dt,
-                                                          accelNoiseMag,
-                                                          NextTrackID++,
-                                                          m_filterGoal == FilterRect,
-                                                          m_useExternalTrackerForLostObjects == TrackKCF));
+                tracks.push_back(std::make_unique<CTrack<REGION_T>>(regions[i],
+                                                                    kalmanType,
+                                                                    dt,
+                                                                    accelNoiseMag,
+                                                                    NextTrackID++,
+                                                                    m_filterGoal == TrackTypes::FilterRect,
+                                                                    m_useExternalTrackerForLostObjects == TrackTypes::TrackKCF));
             }
         }
 
@@ -107,12 +143,12 @@ public:
             track_t maxCost = 0;
             switch (m_distType)
             {
-            case DistCenters:
+            case TrackTypes::DistCenters:
                 for (size_t i = 0; i < tracks.size(); i++)
                 {
                     for (size_t j = 0; j < regions.size(); j++)
                     {
-                        auto dist = tracks[i]->CalcDist(regions[j]);
+                        auto dist = tracks[i]->CalcDist(regions[j].m_obj.Center());
                         Cost[i + j * N] = dist;
                         if (dist > maxCost)
                         {
@@ -122,12 +158,12 @@ public:
                 }
                 break;
 
-            case DistRects:
+            case TrackTypes::DistRects:
                 for (size_t i = 0; i < tracks.size(); i++)
                 {
                     for (size_t j = 0; j < regions.size(); j++)
                     {
-                        auto dist = tracks[i]->CalcDist(regions[j].m_rect);
+                        auto dist = tracks[i]->CalcDist(regions[j].m_obj.BoundingRect());
                         Cost[i + j * N] = dist;
                         if (dist > maxCost)
                         {
@@ -137,12 +173,12 @@ public:
                 }
                 break;
 
-            case DistJaccard:
+            case TrackTypes::DistJaccard:
                 for (size_t i = 0; i < tracks.size(); i++)
                 {
                     for (size_t j = 0; j < regions.size(); j++)
                     {
-                        auto dist = tracks[i]->CalcDistJaccard(regions[j].m_rect);
+                        auto dist = tracks[i]->CalcDistJaccard(regions[j].m_obj.BoundingRect());
                         Cost[i + j * N] = dist;
                         if (dist > maxCost)
                         {
@@ -155,7 +191,7 @@ public:
             // -----------------------------------
             // Solving assignment problem (tracks and predictions of Kalman filter)
             // -----------------------------------
-            if (m_matchType == MatchHungrian)
+            if (m_matchType == TrackTypes::MatchHungrian)
             {
                 AssignmentProblemSolver APS;
                 APS.Solve(Cost, N, M, assignment, AssignmentProblemSolver::optimal);
@@ -251,13 +287,13 @@ public:
         {
             if (find(assignment.begin(), assignment.end(), i) == assignment.end())
             {
-                tracks.push_back(std::make_unique<CTrack>(regions[i],
-                                                          kalmanType,
-                                                          dt,
-                                                          accelNoiseMag,
-                                                          NextTrackID++,
-                                                          m_filterGoal == FilterRect,
-                                                          m_useExternalTrackerForLostObjects == TrackKCF));
+                tracks.push_back(std::make_unique<CTrack<REGION_T>>(regions[i],
+                                                                    kalmanType,
+                                                                    dt,
+                                                                    accelNoiseMag,
+                                                                    NextTrackID++,
+                                                                    m_filterGoal == TrackTypes::FilterRect,
+                                                                    m_useExternalTrackerForLostObjects == TrackTypes::TrackKCF));
             }
         }
 
@@ -274,8 +310,7 @@ public:
             }
             else				     // if not continue using predictions
             {
-                typedef REGIONS_T reg_t;
-                tracks[i]->Update(Point_t(), reg_t(), false, max_trace_length, m_prevFrame, grayFrame);
+                tracks[i]->Update(REGION_T(), false, max_trace_length, m_prevFrame, grayFrame);
             }
         }
 
@@ -286,11 +321,11 @@ private:
     // Use local tracking for regions between two frames
     bool m_useLocalTracking;
 
-    DistType m_distType;
-    KalmanType m_kalmanType;
-    FilterGoal m_filterGoal;
-    LostTrackType m_useExternalTrackerForLostObjects;
-    MatchType m_matchType;
+    TrackTypes::DistType m_distType;
+    TrackTypes::KalmanType m_kalmanType;
+    TrackTypes::FilterGoal m_filterGoal;
+    TrackTypes::LostTrackType m_useExternalTrackerForLostObjects;
+    TrackTypes::MatchType m_matchType;
 
     // Шаг времени опроса фильтра
     track_t dt;

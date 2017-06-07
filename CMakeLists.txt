@@ -29,9 +29,7 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
   set(folder_source  main.cpp
              Detector/BackgroundSubtract.cpp
              Detector/vibe_src/vibe.cpp
-             Tracker/Ctracker.cpp
              Tracker/HungarianAlg/HungarianAlg.cpp
-             Tracker/LocalTracker.cpp
              Tracker/Kalman.cpp)
 
   set(folder_header nms.h

@@ -50,17 +50,17 @@ void MouseTracking(cv::CommandLineParser parser)
 
     bool useLocalTracking = false;
 
-    CTracker tracker(useLocalTracking,
-                     CTracker::DistCenters,
-                     CTracker::KalmanLinear,
-                     CTracker::FilterCenter,
-                     CTracker::TrackNone,
-                     CTracker::MatchHungrian,
-                     0.2f,
-                     0.5f,
-                     100.0f,
-                     25,
-                     25);
+    CTracker<point_reg_t> tracker(useLocalTracking,
+                                  TrackTypes::DistCenters,
+                                  TrackTypes::KalmanLinear,
+                                  TrackTypes::FilterCenter,
+                                  TrackTypes::TrackNone,
+                                  TrackTypes::MatchHungrian,
+                                  0.2f,
+                                  0.5f,
+                                  100.0f,
+                                  25,
+                                  25);
     track_t alpha = 0;
     cv::RNG rng;
     while (k != 27)
@@ -82,7 +82,7 @@ void MouseTracking(cv::CommandLineParser parser)
         point_regions_t regions;
         for (auto pt : pts)
         {
-            regions.push_back(regions::value_type(pt));
+            regions.push_back(point_reg_t(point_reg_t::obj_type(pt)));
         }
 
 
@@ -120,9 +120,10 @@ void MouseTracking(cv::CommandLineParser parser)
 }
 
 // ----------------------------------------------------------------------
+template<typename TRACK_T>
 void DrawTrack(cv::Mat frame,
                int resizeCoeff,
-               const CTrack& track,
+               const TRACK_T& track,
                const std::vector<cv::Scalar>& colors
                )
 {
@@ -207,18 +208,18 @@ void MotionDetector(cv::CommandLineParser parser)
     detector.SetMinObjectSize(cv::Size(minObjWidth, 2 * minObjWidth));
     //detector.SetMinObjectSize(cv::Size(2, 2));
 
-    CTracker tracker(useLocalTracking,
-                     CTracker::DistJaccard,
-                     CTracker::KalmanLinear,
-                     CTracker::FilterRect,
-                     CTracker::TrackNone,      // Use KCF tracker for collisions resolving
-                     CTracker::MatchHungrian,
-                     0.2f,                    // Delta time for Kalman filter
-                     0.1f,                    // Accel noise magnitude for Kalman filter
-                     0.8f,       // Distance threshold between two frames
-                     fps,                     // Maximum allowed skipped frames
-                     3 * fps                 // Maximum trace length
-                     );
+    CTracker<rect_reg_t> tracker(useLocalTracking,
+                                 TrackTypes::DistJaccard,
+                                 TrackTypes::KalmanLinear,
+                                 TrackTypes::FilterRect,
+                                 TrackTypes::TrackNone,      // Use KCF tracker for collisions resolving
+                                 TrackTypes::MatchHungrian,
+                                 0.2f,                    // Delta time for Kalman filter
+                                 0.1f,                    // Accel noise magnitude for Kalman filter
+                                 0.8f,       // Distance threshold between two frames
+                                 fps,                     // Maximum allowed skipped frames
+                                 3 * fps                 // Maximum trace length
+                                 );
 
     int k = 0;
 
@@ -349,18 +350,18 @@ void FaceDetector(cv::CommandLineParser parser)
         return;
     }
 
-    CTracker tracker(useLocalTracking,
-                     CTracker::DistJaccard,   // For this distance type threshold must be from 0 to 1
-                     CTracker::KalmanUnscented,
-                     CTracker::FilterRect,
-                     CTracker::TrackKCF,      // Use KCF tracker for collisions resolving
-                     CTracker::MatchHungrian,
-                     0.3f,                    // Delta time for Kalman filter
-                     0.1f,                    // Accel noise magnitude for Kalman filter
-                     0.8f,                    // Distance threshold between two frames
-                     2 * fps,                 // Maximum allowed skipped frames
-                     5 * fps                  // Maximum trace length
-                     );
+    CTracker<rect_reg_t> tracker(useLocalTracking,
+                                 TrackTypes::DistJaccard,   // For this distance type threshold must be from 0 to 1
+                                 TrackTypes::KalmanUnscented,
+                                 TrackTypes::FilterRect,
+                                 TrackTypes::TrackKCF,      // Use KCF tracker for collisions resolving
+                                 TrackTypes::MatchHungrian,
+                                 0.3f,                    // Delta time for Kalman filter
+                                 0.1f,                    // Accel noise magnitude for Kalman filter
+                                 0.8f,                    // Distance threshold between two frames
+                                 2 * fps,                 // Maximum allowed skipped frames
+                                 5 * fps                  // Maximum trace length
+                                 );
 
     int k = 0;
 
@@ -401,7 +402,7 @@ void FaceDetector(cv::CommandLineParser parser)
         rect_regions_t regions;
         for (auto rect : faceRects)
         {
-            regions.push_back(rect);
+            regions.push_back(rect_reg_t::obj_type(rect));
         }
 
         tracker.Update(regions, gray);
@@ -504,18 +505,18 @@ void PedestrianDetector(cv::CommandLineParser parser)
     LoadCascade(cascade1, cascade2, scanner);
 #endif
 
-    CTracker tracker(useLocalTracking,
-                     CTracker::DistJaccard,
-                     CTracker::KalmanUnscented,
-                     CTracker::FilterRect,
-                     CTracker::TrackKCF,      // Use KCF tracker for collisions resolving
-                     CTracker::MatchHungrian,
-                     0.3f,                    // Delta time for Kalman filter
-                     0.1f,                    // Accel noise magnitude for Kalman filter
-                     0.8f,       // Distance threshold between two frames
-                     1 * fps,                 // Maximum allowed skipped frames
-                     5 * fps                  // Maximum trace length
-                     );
+    CTracker<rect_reg_t> tracker(useLocalTracking,
+                                 TrackTypes::DistJaccard,
+                                 TrackTypes::KalmanUnscented,
+                                 TrackTypes::FilterRect,
+                                 TrackTypes::TrackKCF,      // Use KCF tracker for collisions resolving
+                                 TrackTypes::MatchHungrian,
+                                 0.3f,                    // Delta time for Kalman filter
+                                 0.1f,                    // Accel noise magnitude for Kalman filter
+                                 0.8f,       // Distance threshold between two frames
+                                 1 * fps,                 // Maximum allowed skipped frames
+                                 5 * fps                  // Maximum trace length
+                                 );
 
     int k = 0;
 
@@ -566,7 +567,7 @@ void PedestrianDetector(cv::CommandLineParser parser)
             rect.y += cvRound(rect.height * 0.07f);
             rect.height = cvRound(rect.height * 0.8f);
 
-            regions.push_back(rect);
+            regions.push_back(rect_reg_t::obj_type(rect));
         }
 
         tracker.Update(regions, gray);
@@ -660,21 +661,21 @@ void HybridFaceDetector(cv::CommandLineParser parser)
         return;
     }
 
-    CDetector detector(BackgroundSubtract::ALG_MOG, useLocalTracking, gray);
+    CDetector<rect_regions_t> detector(BackgroundSubtract::ALG_MOG, useLocalTracking, gray);
     detector.SetMinObjectSize(cv::Size(gray.cols / 50, gray.rows / 50));
 
-    CTracker tracker(useLocalTracking,
-                     CTracker::DistCenters,   // For this distance type threshold must be from 0 to 1
-                     CTracker::KalmanUnscented,
-                     CTracker::FilterRect,
-                     CTracker::TrackKCF,      // Use KCF tracker for collisions resolving
-                     CTracker::MatchHungrian,
-                     0.3f,                    // Delta time for Kalman filter
-                     0.1f,                    // Accel noise magnitude for Kalman filter
-                     gray.cols / 10,          // Distance threshold between two frames
-                     2 * fps,                 // Maximum allowed skipped frames
-                     5 * fps                  // Maximum trace length
-                     );
+    CTracker<rect_reg_t> tracker(useLocalTracking,
+                                 TrackTypes::DistCenters,   // For this distance type threshold must be from 0 to 1
+                                 TrackTypes::KalmanUnscented,
+                                 TrackTypes::FilterRect,
+                                 TrackTypes::TrackKCF,      // Use KCF tracker for collisions resolving
+                                 TrackTypes::MatchHungrian,
+                                 0.3f,                    // Delta time for Kalman filter
+                                 0.1f,                    // Accel noise magnitude for Kalman filter
+                                 gray.cols / 10,          // Distance threshold between two frames
+                                 2 * fps,                 // Maximum allowed skipped frames
+                                 5 * fps                  // Maximum trace length
+                                 );
 
     std::vector<cv::Rect> prevRects;
 
@@ -715,12 +716,12 @@ void HybridFaceDetector(cv::CommandLineParser parser)
                                  cv::Size(gray.cols / 2, gray.rows / 2));
 
         detector.Detect(gray);
-        const regions_t& regions1 = detector.GetDetects();
+        const rect_regions_t& regions1 = detector.GetDetects();
 
         std::vector<float> scores(faceRects.size(), 0.5f);
         for (const auto& reg : regions1)
         {
-            faceRects.push_back(reg.m_rect);
+            faceRects.push_back(reg.m_obj.Self());
             scores.push_back(0.4f);
         }
         faceRects.insert(faceRects.end(), prevRects.begin(), prevRects.end());
@@ -731,7 +732,7 @@ void HybridFaceDetector(cv::CommandLineParser parser)
         rect_regions_t regions;
         for (auto rect : allRects)
         {
-            regions.push_back(rect);
+            regions.push_back(rect_reg_t::obj_type(rect));
         }
 
         tracker.Update(regions, gray);

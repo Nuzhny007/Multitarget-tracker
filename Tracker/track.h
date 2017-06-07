@@ -163,7 +163,7 @@ private:
 ///
 /// \brief The CTrack class
 ///
-template<typename REG_T>
+template<typename REGION_T>
 class CTrack
 {
 public:
@@ -176,7 +176,7 @@ public:
     /// \param filterObjectSize
     /// \param externalTrackerForLost
     ///
-    CTrack(const REG_T& region,
+    CTrack(const REGION_T& region,
            TKalmanFilter::KalmanType kalmanType,
            track_t deltaTime,
            track_t accelNoiseMag,
@@ -194,7 +194,7 @@ public:
     {
         if (filterObjectSize)
         {
-            m_kalman = new TKalmanFilter(kalmanType, region.m_rect, deltaTime, accelNoiseMag);
+            m_kalman = new TKalmanFilter(kalmanType, region.m_obj.BoundingRect(), deltaTime, accelNoiseMag);
         }
         else
         {
@@ -221,11 +221,14 @@ public:
     ///
     track_t CalcDist(const cv::Rect& r)
     {
+        const int w = m_lastRegion.m_obj.Width();
+        const int h = m_lastRegion.m_obj.Height();
+
         std::array<track_t, 4> diff;
-        diff[0] = m_predictionPoint.x - m_lastRegion.m_rect.width / 2 - r.x;
-        diff[1] = m_predictionPoint.y - m_lastRegion.m_rect.height / 2 - r.y;
-        diff[2] = static_cast<track_t>(m_lastRegion.m_rect.width - r.width);
-        diff[3] = static_cast<track_t>(m_lastRegion.m_rect.height - r.height);
+        diff[0] = m_predictionPoint.x - w / 2 - r.x;
+        diff[1] = m_predictionPoint.y - h / 2 - r.y;
+        diff[2] = static_cast<track_t>(w - r.width);
+        diff[3] = static_cast<track_t>(h - r.height);
 
         track_t dist = 0;
         for (size_t i = 0; i < diff.size(); ++i)
@@ -259,7 +262,7 @@ public:
     /// \param currFrame
     ///
     void Update(
-            const REG_T& region,
+            const REGION_T& region,
             bool dataCorrect,
             size_t max_trace_length,
             cv::Mat prevFrame,
@@ -304,7 +307,7 @@ public:
         res &= m_trace.GetRawCount(m_trace.size() - 1) / static_cast<float>(m_trace.size()) > minRawRatio;
         if (sizeRatio.width + sizeRatio.height > 0)
         {
-            float sr = m_lastRegion.m_rect.width / static_cast<float>(m_lastRegion.m_rect.height);
+            float sr = m_lastRegion.m_obj.Width() / static_cast<float>(m_lastRegion.m_obj.Height());
             if (sizeRatio.width > 0)
             {
                 res &= (sr > sizeRatio.width);
@@ -320,7 +323,7 @@ public:
     Trace m_trace;
     size_t m_trackID;
     size_t m_skippedFrames;
-    REG_T m_lastRegion;
+    REGION_T m_lastRegion;
     Point_t m_averagePoint;   ///< Average point after LocalTracking
     cv::Rect m_boundidgRect;  ///< Bounding rect after LocalTracking
 
@@ -336,11 +339,12 @@ public:
         }
         else
         {
+            const int w = m_lastRegion.m_obj.Width();
+            const int h = m_lastRegion.m_obj.Height();
             return cv::Rect(
-                        static_cast<int>(m_predictionPoint.x - m_lastRegion.m_rect.width / 2),
-                        static_cast<int>(m_predictionPoint.y - m_lastRegion.m_rect.height / 2),
-                        m_lastRegion.m_rect.width,
-                        m_lastRegion.m_rect.height);
+                        static_cast<int>(m_predictionPoint.x - w / 2),
+                        static_cast<int>(m_predictionPoint.y - h / 2),
+                        w, h);
         }
     }
 
@@ -363,7 +367,7 @@ private:
     /// \param currFrame
     ///
     void RectUpdate(
-            const REG_T& region,
+            const REGION_T& region,
             bool dataCorrect,
             cv::Mat prevFrame,
             cv::Mat currFrame
@@ -422,10 +426,10 @@ private:
                 if (dataCorrect)
                 {
                     cv::Rect prect(
-                                (m_boundidgRect.x + region.m_rect.x) / 2,
-                                (m_boundidgRect.y + region.m_rect.y) / 2,
-                                (m_boundidgRect.width + region.m_rect.width) / 2,
-                                (m_boundidgRect.height + region.m_rect.height) / 2);
+                                (m_boundidgRect.x + region.m_obj.GetLeft()) / 2,
+                                (m_boundidgRect.y + region.m_obj.GetTop()) / 2,
+                                (m_boundidgRect.width + region.m_obj.Width()) / 2,
+                                (m_boundidgRect.height + region.m_obj.Height()) / 2);
 
                     m_predictionRect = m_kalman->Update(prect, dataCorrect);
                 }
@@ -442,7 +446,7 @@ private:
             }
             else
             {
-                m_predictionRect = m_kalman->Update(region.m_rect, dataCorrect);
+                m_predictionRect = m_kalman->Update(region.m_obj.BoundingRect(), dataCorrect);
             }
         }
         if (m_predictionRect.width < 2)
@@ -520,5 +524,3 @@ private:
         }
     }
 };
-
-typedef std::vector<std::unique_ptr<CTrack>> tracks_t;

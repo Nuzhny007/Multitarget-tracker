@@ -75,7 +75,26 @@ public:
         m_pt.y = val;
     }
 
+    T Width() const
+    {
+        return 1;
+    }
+    T Height() const
+    {
+        return 1;
+    }
+
     cv::Point_<T> Center() const
+    {
+        return m_pt;
+    }
+
+    cv::Rect_<T> BoundingRect() const
+    {
+        return cv::Rect_<T>(m_pt.x, m_pt.y, Width(), Height());
+    }
+
+    const value_type& Self() const
     {
         return m_pt;
     }
@@ -151,6 +170,25 @@ public:
         return (m_rect.tl() + m_rect.br()) / 2;
     }
 
+    T Width() const
+    {
+        return m_rect.width;
+    }
+    T Height() const
+    {
+        return m_rect.height;
+    }
+
+    cv::Rect_<T> BoundingRect() const
+    {
+        return m_rect;
+    }
+
+    const value_type& Self() const
+    {
+        return m_rect;
+    }
+
 private:
     value_type m_rect;
 };
@@ -162,6 +200,9 @@ template<typename OBJ>
 class CRegion
 {
 public:
+    typedef OBJ value_type;
+    typedef value_type obj_type;
+
     CRegion()
     {
     }
@@ -180,5 +221,8 @@ public:
     std::vector<cv::Point2f> m_points;
 };
 
-typedef std::vector<CRegion<PointObject<int>>> point_regions_t;
-typedef std::vector<CRegion<RectObject<int>>> rect_regions_t;
+typedef CRegion<PointObject<int>> point_reg_t;
+typedef std::vector<point_reg_t> point_regions_t;
+
+typedef CRegion<RectObject<int>> rect_reg_t;
+typedef std::vector<rect_reg_t> rect_regions_t;
