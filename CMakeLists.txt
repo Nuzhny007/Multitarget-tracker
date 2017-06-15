@@ -23,6 +23,8 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 # Предполагаем, что FindOpenCV.cmake расположен по адресу CMAKE_MODULE_PATH.
 # ----------------------------------------------------------------------------
   FIND_PACKAGE(OpenCV)
+  FIND_PACKAGE(PkgConfig)
+  pkg_check_modules(EIGEN3 REQUIRED eigen3)
 # ----------------------------------------------------------------------------  
 # ищем все .cpp и .h файлы и добавляем их в наш проект 
 # ----------------------------------------------------------------------------
@@ -37,6 +39,9 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
              Tracker/Ctracker.cpp
              Tracker/HungarianAlg/HungarianAlg.cpp
+             Tracker/gmphd/eigen_tools.cpp
+             Tracker/gmphd/gaussian_mixture.cpp
+             Tracker/gmphd/gmphd_filter.cpp
              Tracker/LocalTracker.cpp
              Tracker/Kalman.cpp)
 
@@ -55,6 +60,9 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
              Tracker/Ctracker.h
              Tracker/track.h
              Tracker/HungarianAlg/HungarianAlg.h
+             Tracker/gmphd/eigen_tools.h
+             Tracker/gmphd/gaussian_mixture.h
+             Tracker/gmphd/gmphd_filter.h
              Tracker/LocalTracker.h
              Tracker/Kalman.h
              Tracker/defines.h)
@@ -190,6 +198,7 @@ endif(USE_OCV_UKF)
 
   INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR})
   INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
+  INCLUDE_DIRECTORIES(${EIGEN3_INCLUDE_DIRS})
 # ----------------------------------------------------------------------------
 # и Lib-ы opencv 
 # ----------------------------------------------------------------------------

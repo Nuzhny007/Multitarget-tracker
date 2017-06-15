@@ -11,6 +11,8 @@
 #include "pedestrians/c4-pedestrian-detector.h"
 #include "nms.h"
 
+#include "gmphd/gmphd_filter.h"
+
 //------------------------------------------------------------------------
 // Mouse callbacks
 //------------------------------------------------------------------------
@@ -793,6 +795,207 @@ void HybridFaceDetector(cv::CommandLineParser parser)
 }
 
 // ----------------------------------------------------------------------
+void GMPHDTracker(cv::CommandLineParser parser)
+{
+    std::string inFile = parser.get<std::string>(0);
+    std::string outFile = parser.get<std::string>("out");
+
+    cv::VideoWriter writer;
+
+    std::vector<cv::Scalar> colors = { cv::Scalar(255, 0, 0), cv::Scalar(0, 255, 0), cv::Scalar(0, 0, 255), cv::Scalar(255, 255, 0), cv::Scalar(0, 255, 255), cv::Scalar(255, 0, 255), cv::Scalar(255, 127, 255), cv::Scalar(127, 0, 255), cv::Scalar(127, 0, 127) };
+    cv::VideoCapture capture(inFile);
+    if (!capture.isOpened())
+    {
+        return;
+    }
+    cv::namedWindow("Video");
+    cv::Mat frame;
+    cv::Mat origGray;
+    cv::Mat gray;
+
+    bool showLogs = parser.get<int>("show_logs") != 0;
+
+    const int StartFrame = parser.get<int>("start_frame");
+    const int EndFrame = parser.get<int>("end_frame");
+    capture.set(cv::CAP_PROP_POS_FRAMES, StartFrame);
+
+    const int fps = std::max(1, cvRound(capture.get(cv::CAP_PROP_FPS)));
+
+    capture >> frame;
+    cv::cvtColor(frame, origGray, cv::COLOR_BGR2GRAY);
+
+    bool resizeFrame = true;
+
+    int resizeCoeff = 1;
+    cv::Size newSize(origGray.cols, origGray.rows);
+    const int minObjWidth = 10;
+    if (resizeFrame)
+    {
+        int minPedestrianWidth = 40;
+        int resizeCoeff = (origGray.cols * minObjWidth) / minPedestrianWidth;
+        cv::Size newSize(origGray.cols / resizeCoeff, origGray.rows / resizeCoeff);
+        cv::resize(origGray, gray, newSize, 0, 0, cv::INTER_LINEAR);
+    }
+    else
+    {
+        gray = origGray;
+    }
+
+    // If true then trajectories will be more smooth and accurate
+    // But on high resolution videos with many objects may be to slow
+    bool useLocalTracking = false;
+
+    CDetector detector(BackgroundSubtract::ALG_MOG, useLocalTracking, gray);
+    detector.SetMinObjectSize(cv::Size(minObjWidth, 2 * minObjWidth));
+    //detector.SetMinObjectSize(cv::Size(2, 2));
+
+    GMPHD m_GMPHDTracker(1000, 2, true, false);
+    // Birth model (spawn)
+    GaussianModel Birth(4);
+    Birth.m_weight = 0.2f;
+    Birth.m_mean(0,0) = 400.f;
+    Birth.m_mean(1,0) = 400.f;
+    Birth.m_mean(2,0) = 0.f;
+    Birth.m_mean(3,0) = 0.f;
+    Birth.m_cov = 400.f * Eigen::MatrixXf::Identity(4,4);
+
+    std::vector<GaussianModel> BirthModel;
+    BirthModel.push_back(Birth);
+    m_GMPHDTracker.setBirthModel(BirthModel);
+
+    // Dynamics (motion model)
+    m_GMPHDTracker.setDynamicsModel(1.f, 10.f);
+
+    // Detection model
+    float const probDetection = 0.5f;
+    float const measNoisePose = 2.f;
+    float const measNoiseSpeed = 20.f;
+    float const measBackground = 0.5f;
+    m_GMPHDTracker.setObservationModel(probDetection, measNoisePose, measNoiseSpeed, measBackground);
+
+    // Pruning parameters
+    m_GMPHDTracker.setPruningParameters(0.3f, 3.f, 10);
+
+    // Spawn (target apparition)
+    std::vector<SpawningModel> spawnModel(1);
+    m_GMPHDTracker.setSpawnModel(spawnModel);
+
+    // Survival over time
+    m_GMPHDTracker.setSurvivalProbability(0.95f);
+
+    int k = 0;
+
+    double freq = cv::getTickFrequency();
+
+    int64 allTime = 0;
+
+    bool manualMode = false;
+    int framesCounter = StartFrame + 1;
+    while (k != 27)
+    {
+        capture >> frame;
+        if (frame.empty())
+        {
+            break;
+        }
+        cv::cvtColor(frame, origGray, cv::COLOR_BGR2GRAY);
+
+        if (resizeCoeff != 1)
+        {
+            cv::resize(origGray, gray, newSize, 0, 0, cv::INTER_LINEAR);
+        }
+        else
+        {
+            gray = origGray;
+        }
+
+        if (!writer.isOpened())
+        {
+            writer.open(outFile, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), capture.get(cv::CAP_PROP_FPS), frame.size(), true);
+        }
+
+        int64 t1 = cv::getTickCount();
+
+        const std::vector<Point_t>& centers = detector.Detect(gray);
+        const regions_t& regions = detector.GetDetects();
+
+        // Update the tracker
+        std::vector<track_t> targetMeasPosition;
+        targetMeasPosition.reserve(2 * regions.size());
+        std::vector<track_t> targetMeasSpeed(2 * regions.size(), 0);
+        for (const CRegion& region : regions)
+        {
+            auto c = (region.m_rect.tl() + region.m_rect.br()) / 2;
+            targetMeasPosition.push_back(c.x);
+            targetMeasPosition.push_back(c.y);
+        }
+        m_GMPHDTracker.setNewMeasurements(targetMeasPosition, targetMeasSpeed);
+
+        // Get all the predicted targets
+        m_GMPHDTracker.propagate();
+
+        std::vector<track_t> targetEstimPosition;
+        std::vector<track_t> targetEstimSpeed;
+        std::vector<track_t> targetEstimWeight;
+        m_GMPHDTracker.getTrackedTargets(targetEstimPosition, targetEstimSpeed, targetEstimWeight, 0.2f);
+
+        int64 t2 = cv::getTickCount();
+
+        allTime += t2 - t1;
+        int currTime = cvRound(1000 * (t2 - t1) / freq);
+
+        if (showLogs)
+        {
+            std::cout << "Frame " << framesCounter << ": tracks = " << targetEstimPosition.size() << ", time = " << currTime << std::endl;
+        }
+
+        // Display measurement hits
+        for ( auto tgt = targetMeasPosition.begin(); tgt != targetMeasPosition.end(); ++tgt)
+        {
+            track_t x = *tgt;
+            track_t y = *(++tgt);
+            cv::circle(frame, cv::Point(x, y), 2, cv::Scalar(0, 0, 255), 2);
+        }
+
+        // Display filter output
+        float const scale = 5.f;
+        auto w = targetEstimWeight.begin();
+        for ( auto tgt = targetEstimPosition.begin(); tgt!= targetEstimPosition.end(); tgt++)
+        {
+            track_t x = *tgt;
+            track_t y = *(++tgt);
+            cv::circle(frame, cv::Point(x, y), *(w++) * scale, cv::Scalar(0, 255, 0),2);
+        }
+
+        detector.CalcMotionMap(frame);
+
+        cv::imshow("Video", frame);
+
+        int waitTime = manualMode ? 0 : std::max<int>(1, 1000 / fps - currTime);
+        k = cv::waitKey(waitTime);
+
+        if (k == 'm' || k == 'M')
+        {
+            manualMode = !manualMode;
+        }
+
+        if (writer.isOpened())
+        {
+            writer << frame;
+        }
+
+        ++framesCounter;
+        if (EndFrame && framesCounter > EndFrame)
+        {
+            break;
+        }
+    }
+
+    std::cout << "work time = " << (allTime / freq) << std::endl;
+    cv::waitKey(parser.get<int>("end_delay"));
+}
+
+// ----------------------------------------------------------------------
 static void Help()
 {
     printf("\nExamples of the Multitarget tracking algorithm\n"
@@ -844,6 +1047,10 @@ int main(int argc, char** argv)
 
     case 4:
         HybridFaceDetector(parser);
+        break;
+
+    case 5:
+        GMPHDTracker(parser);
         break;
     }
 
