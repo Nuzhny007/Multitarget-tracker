@@ -849,18 +849,22 @@ void GMPHDTracker(cv::CommandLineParser parser)
     detector.SetMinObjectSize(cv::Size(minObjWidth, 2 * minObjWidth));
     //detector.SetMinObjectSize(cv::Size(2, 2));
 
-    GMPHD m_GMPHDTracker(1000, 2, true, false);
+    const int dimension = 4;
+    GMPHD<dimension> m_GMPHDTracker(1000, false);
     // Birth model (spawn)
-    GaussianModel Birth(4);
+    GMPHD<dimension>::GModel Birth;
     Birth.m_weight = 0.2f;
-    Birth.m_mean(0,0) = 400.f;
-    Birth.m_mean(1,0) = 400.f;
-    Birth.m_mean(2,0) = 0.f;
-    Birth.m_mean(3,0) = 0.f;
-    Birth.m_cov = 400.f * Eigen::MatrixXf::Identity(4,4);
+    Birth.m_mean(0, 0) = origGray.rows / 2;
+    Birth.m_mean(1, 0) = origGray.cols / 2;
+    Birth.m_mean(2, 0) = minObjWidth;
+    Birth.m_mean(3, 0) = 2 * minObjWidth;
+    Birth.m_mean(4, 0) = 0.f;
+    Birth.m_mean(5, 0) = 0.f;
+    Birth.m_mean(6, 0) = 0.f;
+    Birth.m_mean(7, 0) = 0.f;
+    Birth.m_cov = (origGray.cols / 2) * Eigen::MatrixXf::Identity(2 * dimension, 2 * dimension);
 
-    std::vector<GaussianModel> BirthModel;
-    BirthModel.push_back(Birth);
+    std::vector<GMPHD<dimension>::GModel> BirthModel = { Birth };
     m_GMPHDTracker.setBirthModel(BirthModel);
 
     // Dynamics (motion model)
@@ -877,7 +881,7 @@ void GMPHDTracker(cv::CommandLineParser parser)
     m_GMPHDTracker.setPruningParameters(0.3f, 3.f, 10);
 
     // Spawn (target apparition)
-    std::vector<SpawningModel> spawnModel(1);
+    std::vector<GMPHD<dimension>::SModel> spawnModel(1);
     m_GMPHDTracker.setSpawnModel(spawnModel);
 
     // Survival over time
@@ -921,13 +925,14 @@ void GMPHDTracker(cv::CommandLineParser parser)
 
         // Update the tracker
         std::vector<track_t> targetMeasPosition;
-        targetMeasPosition.reserve(2 * regions.size());
-        std::vector<track_t> targetMeasSpeed(2 * regions.size(), 0);
+        targetMeasPosition.reserve(4 * regions.size());
+        std::vector<track_t> targetMeasSpeed(4 * regions.size(), 0);
         for (const CRegion& region : regions)
         {
-            auto c = (region.m_rect.tl() + region.m_rect.br()) / 2;
-            targetMeasPosition.push_back(c.x);
-            targetMeasPosition.push_back(c.y);
+            targetMeasPosition.push_back(region.m_rect.x);
+            targetMeasPosition.push_back(region.m_rect.y);
+            targetMeasPosition.push_back(region.m_rect.width);
+            targetMeasPosition.push_back(region.m_rect.height);
         }
         m_GMPHDTracker.setNewMeasurements(targetMeasPosition, targetMeasSpeed);
 
@@ -937,7 +942,7 @@ void GMPHDTracker(cv::CommandLineParser parser)
         std::vector<track_t> targetEstimPosition;
         std::vector<track_t> targetEstimSpeed;
         std::vector<track_t> targetEstimWeight;
-        m_GMPHDTracker.getTrackedTargets(targetEstimPosition, targetEstimSpeed, targetEstimWeight, 0.2f);
+        m_GMPHDTracker.getTrackedTargets(targetEstimPosition, targetEstimSpeed, targetEstimWeight, 0.4f);
 
         int64 t2 = cv::getTickCount();
 
@@ -950,22 +955,37 @@ void GMPHDTracker(cv::CommandLineParser parser)
         }
 
         // Display measurement hits
-        for ( auto tgt = targetMeasPosition.begin(); tgt != targetMeasPosition.end(); ++tgt)
+        for (auto tgt = targetMeasPosition.begin(); tgt != targetMeasPosition.end(); ++tgt)
         {
             track_t x = *tgt;
             track_t y = *(++tgt);
-            cv::circle(frame, cv::Point(x, y), 2, cv::Scalar(0, 0, 255), 2);
+            track_t width = *(++tgt);
+            track_t height = *(++tgt);
+            //cv::rectangle(frame, cv::Rect(x, y, width, height), cv::Scalar(0, 0, 255), 1);
         }
 
         // Display filter output
-        float const scale = 5.f;
         auto w = targetEstimWeight.begin();
-        for ( auto tgt = targetEstimPosition.begin(); tgt!= targetEstimPosition.end(); tgt++)
+        for (auto tgt = targetEstimPosition.begin(); tgt!= targetEstimPosition.end(); ++tgt)
         {
+            track_t weight = *w;
+
             track_t x = *tgt;
             track_t y = *(++tgt);
-            cv::circle(frame, cv::Point(x, y), *(w++) * scale, cv::Scalar(0, 255, 0),2);
+            track_t width = *(++tgt);
+            track_t height = *(++tgt);
+            if (x > 0 && width > 0 && y > 0 && height > 0)
+            {
+                cv::rectangle(frame, cv::Rect(x, y, width, height), cv::Scalar(0, 255, 0), 1);
+
+                std::string str = std::to_string(weight);
+                cv::putText(frame, str, cv::Point(x + 3, y + 3), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 200, 0), 1, 8, false);
+            }
+
+            ++w;
         }
+
+        std::cout << "targetMeasPosition = " << targetMeasPosition.size() << ", targetEstimPosition = " << targetEstimPosition.size() << std::endl;
 
         detector.CalcMotionMap(frame);
 

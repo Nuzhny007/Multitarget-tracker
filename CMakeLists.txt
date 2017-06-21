@@ -40,8 +40,6 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
              Tracker/Ctracker.cpp
              Tracker/HungarianAlg/HungarianAlg.cpp
              Tracker/gmphd/eigen_tools.cpp
-             Tracker/gmphd/gaussian_mixture.cpp
-             Tracker/gmphd/gmphd_filter.cpp
              Tracker/LocalTracker.cpp
              Tracker/Kalman.cpp)
 
