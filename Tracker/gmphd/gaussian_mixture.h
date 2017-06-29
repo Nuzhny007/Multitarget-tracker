@@ -9,6 +9,31 @@
 #include <algorithm>
 
 /*!
+ * \brief check_val
+ * \param val
+ * \return
+ */
+template<typename T>
+bool check_val(T val)
+{
+    bool n = std::isnan(val) || std::isnan(-val);
+    bool i = std::isinf(val);
+    bool f = !std::isfinite(val);
+    bool neg = val < 0;
+    bool big = val > 1000;
+
+    bool res = n || i || f || neg || big;
+
+    if (res)
+    {
+        std::cout << "Val " << val << " error!!!" << std::endl;
+        //assert(0);
+    }
+
+    return res;
+}
+
+/*!
  * \brief Stupid index structure to help sort gaussian mixtures
  */
 struct index_w
@@ -184,8 +209,9 @@ public:
             // - pop out the corresponding gaussians, in reverse
             auto it = m_gaussians.begin ();
 
-            for (int i=i_gaussians_to_merge.size () -1; i>-1; ++i) {
-                m_gaussians.erase ( it + i);
+            for (int i = i_gaussians_to_merge.size () -1; i > -1; ++i)
+            {
+                m_gaussians.erase(it + i);
             }
         }
 
@@ -248,9 +274,14 @@ public:
         {
             printf("Gaussian mixture : \n");
 
-            int i= 0;
+            int i = 0;
             for ( auto const & gaussian : m_gaussians)
             {
+                if (check_val(gaussian.m_mean(0, 0)))
+                {
+                    printf("print gm Error!!!!");
+                }
+#if 0
                 printf("%2d - pos %3.1f | %3.1f | %3.1f - cov %3.1f | %3.1f | %3.1f - spd %3.2f | %3.2f | %3.2f - weight %3.3f\n",
                        i++,
                        gaussian.m_mean(0,0),
@@ -263,6 +294,20 @@ public:
                        gaussian.m_mean(4,0),
                        gaussian.m_mean(5,0),
                        gaussian.m_weight) ;
+#else
+                std::cout << i++ << " - pos " <<
+                        gaussian.m_mean(0,0) << " | " <<
+                        gaussian.m_mean(1,0) << " | " <<
+                        gaussian.m_mean(2,0) << " | " <<
+                        gaussian.m_cov(0,0) << " | " <<
+                        gaussian.m_cov(1,1) << " | " <<
+                        gaussian.m_cov(2,2) << " | " <<
+                        gaussian.m_mean(3,0) << " | " <<
+                        gaussian.m_mean(4,0) << " | " <<
+                        gaussian.m_mean(5,0) << " | " <<
+                        gaussian.m_weight << std::endl;
+
+#endif
             }
             printf("\n");
         }
@@ -274,12 +319,10 @@ public:
      * \param merge_threshold
      * \param max_gaussians
      */
-    void prune(float  trunc_threshold, float  merge_threshold, unsigned int max_gaussians)
+    void prune(float trunc_threshold, float merge_threshold, unsigned int max_gaussians)
     {
         // Sort the gaussians mixture, ascending order
-        sort ();
-
-        int index, i_best;
+        sort();
 
         std::vector<int> i_close_to_best;
 
@@ -287,13 +330,13 @@ public:
         GModel merged_gaussian;
 
         merged_gaussian.clear();
-        pruned_targets.m_gaussians.clear();
+        pruned_targets.m_gaussians.reserve(max_gaussians);
 
         while ( !m_gaussians.empty()
                 && pruned_targets.m_gaussians.size () < max_gaussians )
         {
             // - Pick the bigger gaussian (based on weight)
-            i_best = selectBestGaussian ();
+            int i_best = selectBestGaussian();
 
             if ( i_best == -1 || m_gaussians[i_best].m_weight < trunc_threshold)
             {
@@ -303,14 +346,14 @@ public:
             {
                 // - Select all the gaussians close enough, to merge if needed
                 i_close_to_best.clear();
-                selectCloseGaussians (i_best, merge_threshold, i_close_to_best);
+                selectCloseGaussians(i_best, merge_threshold, i_close_to_best);
 
                 // - Build a new merged gaussian
-                i_close_to_best.push_back (i_best); // Add the initial gaussian
+                i_close_to_best.push_back(i_best); // Add the initial gaussian
 
                 if (i_close_to_best.size() > 1)
                 {
-                    merged_gaussian = mergeGaussians (i_close_to_best, false);
+                    merged_gaussian = mergeGaussians(i_close_to_best, false);
                 }
                 else
                 {
@@ -318,7 +361,7 @@ public:
                 }
 
                 // - Append merged gaussian to the pruned_targets gaussian mixture
-                pruned_targets.m_gaussians.push_back (merged_gaussian);
+                pruned_targets.m_gaussians.push_back(merged_gaussian);
 
                 // - Remove all the merged gaussians from current_targets :
                 // -- Sort the indexes
@@ -327,7 +370,7 @@ public:
                 // -- Remove from the last one (to keep previous indexes unchanged)
                 while (!i_close_to_best.empty())
                 {
-                    index = i_close_to_best.back();
+                    int index = i_close_to_best.back();
                     i_close_to_best.pop_back();
 
                     m_gaussians.erase(m_gaussians.begin() + index);
@@ -357,12 +400,10 @@ public:
      */
     void selectCloseGaussians(int i_ref, float threshold, std::vector<int> & close_gaussians)
     {
-        close_gaussians.clear ();
+        close_gaussians.clear();
 
-        float gauss_distance;
-
-        Eigen::Matrix<float, 3,1> diff_vec;
-        Eigen::Matrix<float, 3,3> cov_inverse;
+        Eigen::Matrix<float, 3, 1> diff_vec;
+        Eigen::Matrix<float, 3, 3> cov_inverse;
 
         // We only take positions into account there
         int i= 0;
@@ -371,19 +412,16 @@ public:
             if (i != i_ref)
             {
                 // Compute distance
-                diff_vec = m_gaussians[i_ref].m_mean.block(0,0,3,1) -
-                        gaussian.m_mean.block(0,0,3,1);
+                diff_vec = m_gaussians[i_ref].m_mean.block(0,0,3,1) - gaussian.m_mean.block(0,0,3,1);
 
                 cov_inverse = (m_gaussians[i_ref].m_cov.block(0,0,3,3)).inverse();
 
-                gauss_distance = diff_vec.transpose() *
-                        cov_inverse.block(0,0,3,3) *
-                        diff_vec;
+                float gauss_distance = diff_vec.transpose() * cov_inverse.block(0,0,3,3) * diff_vec;
 
                 // Add to the set of close gaussians, if below threshold
                 if ((gauss_distance < threshold) && (gaussian.m_weight != 0.f))
                 {
-                    close_gaussians.push_back (i);
+                    close_gaussians.push_back(i);
                 }
             }
             ++i;
@@ -400,7 +438,7 @@ public:
 
         float best_weight = 0.f;
         int   best_index = -1;
-        int i= 0;
+        int i = 0;
 
         std::for_each(m_gaussians.begin(), m_gaussians.end(), [&](GModel const & gaussian)
         {

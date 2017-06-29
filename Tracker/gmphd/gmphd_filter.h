@@ -45,10 +45,9 @@ public:
      * \param max_gaussians
      * \param verbose
      */
-    GMPHD(int max_gaussians, bool verbose = false)
+    GMPHD(bool verbose = false)
         :
-          m_bVerbose(verbose),
-          m_maxGaussians(max_gaussians)
+          m_bVerbose(verbose)
     {
         m_pruneTruncThld = 0.f;
         m_pDetection = 0.f;
@@ -95,7 +94,7 @@ public:
      * Input: raw measurements and possible ref change
      * \param transform
      */
-    void  setNewReferential( Eigen::Matrix4f const & transform)
+    void setNewReferential( Eigen::Matrix4f const & transform)
     {
         // Change referential for every gaussian in the gaussian mixture
         m_currTargets->changeReferential(transform);
@@ -106,7 +105,7 @@ public:
      * \param position
      * \param speed
      */
-    void  setNewMeasurements( std::vector<float> const & position, std::vector<float> const & speed)
+    void setNewMeasurements( std::vector<float> const & position, std::vector<float> const & speed)
     {
         // Clear the gaussian mixture
         m_measTargets->m_gaussians.clear();
@@ -168,7 +167,7 @@ public:
      * \param sampling
      * \param processNoise
      */
-    void  setDynamicsModel( float sampling, float processNoise )
+    void setDynamicsModel(float sampling, float processNoise)
     {
 
         m_samplingPeriod  = sampling;
@@ -177,9 +176,9 @@ public:
         // Fill in propagation matrix :
         m_tgtDynTrans = Eigen::MatrixXf::Identity(2 * DIM, 2 * DIM);
 
-        for (unsigned int i = 0; i<DIM; ++i)
+        for (unsigned int i = 0; i < DIM; ++i)
         {
-            m_tgtDynTrans(i,DIM+i) = m_samplingPeriod;
+            m_tgtDynTrans(i, DIM + i) = m_samplingPeriod;
         }
 
         // Fill in covariance matrix
@@ -238,8 +237,8 @@ public:
      * \param prune_merge_thld
      * \param prune_max_nb
      */
-    void  setPruningParameters(float  prune_trunc_thld, float  prune_merge_thld,
-                               int    prune_max_nb)
+    void  setPruningParameters(float prune_trunc_thld, float prune_merge_thld,
+                               int   prune_max_nb)
     {
 
         m_pruneTruncThld = prune_trunc_thld;
@@ -280,6 +279,11 @@ public:
         int i = 0;
         for (auto const & gauss : m_currTargets->m_gaussians )
         {
+            if (check_val(gauss.m_mean(0, 0)))
+            {
+                printf("print filter Error!!!!");
+            }
+
             printf("Gaussian %d - pos %.1f  %.1f %.1f - cov %.1f  %.1f %.1f - weight %.3f\n",
                    i++,
                    gauss.m_mean(0,0), gauss.m_mean(1,0), gauss.m_mean(2,0),
@@ -303,9 +307,9 @@ public:
         predictTargets();
 
         // Build the update components
-        buildUpdate ();
+        buildUpdate();
 
-        if( m_bVerbose )
+        if (m_bVerbose)
         {
             printf("\nGMPHD_propagate :--- Expected targets : %d ---\n", m_nPredTargets);
             m_expTargets->print();
@@ -317,7 +321,7 @@ public:
         if (m_bVerbose)
         {
             printf("\nGMPHD_propagate :--- \n");
-            m_currTargets->print ();
+            m_currTargets->print();
         }
 
         // Prune gaussians (remove weakest, merge close enough gaussians)
@@ -352,7 +356,7 @@ private:
     /*!
      * \brief buildUpdate
      */
-    void  buildUpdate()
+    void buildUpdate()
     {
         Eigen::MatrixXf temp_matrix(2 * DIM, 2 * DIM);
 
@@ -362,33 +366,31 @@ private:
 
         if(m_birthTargets->m_gaussians.size () > 0)
         {
-            for (unsigned int i=0; i<m_birthTargets->m_gaussians.size (); ++i)
+            for (unsigned int i = 0; i < m_birthTargets->m_gaussians.size(); ++i)
             {
-                m_iBirthTargets.push_back( m_expTargets->m_gaussians.size () + i );
+                m_iBirthTargets.push_back(m_expTargets->m_gaussians.size() + i);
             }
 
-            m_expTargets->m_gaussians.insert(m_expTargets->m_gaussians.end (), m_birthTargets->m_gaussians.begin (),
-                                             m_birthTargets->m_gaussians.begin () + m_birthTargets->m_gaussians.size ());
+            m_expTargets->m_gaussians.insert(m_expTargets->m_gaussians.end(), m_birthTargets->m_gaussians.begin(),
+                                             m_birthTargets->m_gaussians.begin() + m_birthTargets->m_gaussians.size());
         }
 
         // - spawned targets
         if (m_spawnTargets->m_gaussians.size () > 0)
         {
-            m_expTargets->m_gaussians.insert( m_expTargets->m_gaussians.end (), m_spawnTargets->m_gaussians.begin (),
-                                              m_spawnTargets->m_gaussians.begin () + m_spawnTargets->m_gaussians.size ());
+            m_expTargets->m_gaussians.insert(m_expTargets->m_gaussians.end(), m_spawnTargets->m_gaussians.begin(),
+                                              m_spawnTargets->m_gaussians.begin() + m_spawnTargets->m_gaussians.size());
         }
 
         if (m_bVerbose)
         {
-            printf("GMPHD : inserted %zu birth targets, now %zu expected\n",
-                   m_birthTargets->m_gaussians.size (), m_expTargets->m_gaussians.size());
+            printf("GMPHD : inserted %zu birth targets, now %zu expected\n", m_birthTargets->m_gaussians.size (), m_expTargets->m_gaussians.size());
 
-            m_birthTargets->print ();
+            m_birthTargets->print();
 
-            printf("GMPHD : inserted %zu spawned targets, now %zu expected\n",
-                   m_spawnTargets->m_gaussians.size (), m_expTargets->m_gaussians.size());
+            printf("GMPHD : inserted %zu spawned targets, now %zu expected\n", m_spawnTargets->m_gaussians.size (), m_expTargets->m_gaussians.size());
 
-            m_spawnTargets->print ();
+            m_spawnTargets->print();
         }
 
         // Compute PHD update components (for every expected target)
@@ -469,11 +471,14 @@ private:
 
                 new_spawn.m_cov = spawn.m_cov + spawn.m_trans * curr.m_cov * spawn.m_trans.transpose();
 
-                // Add this new gaussian to the list of expected targets
-                m_spawnTargets->m_gaussians.push_back ( std::move(new_spawn) );
+                if (!check_val(new_spawn.m_mean(0, 0)))
+                {
+                    // Add this new gaussian to the list of expected targets
+                    m_spawnTargets->m_gaussians.push_back(std::move(new_spawn));
 
-                // Update the number of expected targets
-                ++m_nPredTargets;
+                    // Update the number of expected targets
+                    ++m_nPredTargets;
+                }
             }
         }
     }
@@ -495,19 +500,21 @@ private:
 
             new_target.m_mean = m_tgtDynTrans * curr.m_mean;
 
-            new_target.m_cov = m_tgtDynCov + m_tgtDynTrans
-                    * curr.m_cov * m_tgtDynTrans.transpose();
+            new_target.m_cov = m_tgtDynCov + m_tgtDynTrans * curr.m_cov * m_tgtDynTrans.transpose();
 
             // Push back to the expected targets
-            m_expTargets->m_gaussians.push_back( new_target );
-            ++m_nPredTargets;
+            if (!check_val(new_target.m_mean(0, 0)))
+            {
+                m_expTargets->m_gaussians.push_back(new_target);
+                ++m_nPredTargets;
+            }
         }
     }
 
     /*!
      * \brief pruneGaussians
      */
-    void  pruneGaussians()
+    void pruneGaussians()
     {
         m_currTargets->prune( m_pruneTruncThld, m_pruneMergeThld, m_nMaxPrune );
     }
@@ -515,14 +522,12 @@ private:
     /*!
      * \brief update
      */
-    void  update()
+    void update()
     {
-        unsigned int n_meas, n_targt, index;
         m_currTargets->m_gaussians.clear();
 
         // We'll consider every possible association : vector size is (expected targets)*(measured targets)
-        m_currTargets->m_gaussians.resize((m_measTargets->m_gaussians.size () + 1) *
-                                          m_expTargets->m_gaussians.size ());
+        m_currTargets->m_gaussians.resize((m_measTargets->m_gaussians.size() + 1) * m_expTargets->m_gaussians.size());
 
         // First set of gaussians : mere propagation of existing ones
         // \warning : don't propagate the "birth" targets...
@@ -531,16 +536,15 @@ private:
         m_nPredTargets =  m_expTargets->m_gaussians.size ();
         int i_birth_current = 0;
 
-        for (unsigned int i=0; i<m_nPredTargets; ++i)
+        for (unsigned int i = 0; i < m_nPredTargets; ++i)
         {
             if (i != m_iBirthTargets[i_birth_current])
             {
-                m_currTargets->m_gaussians[i].m_weight = (1.f - m_pDetection) *
-                        m_expTargets->m_gaussians[i].m_weight;
+                m_currTargets->m_gaussians[i].m_weight = (1.f - m_pDetection) * m_expTargets->m_gaussians[i].m_weight;
             }
             else
             {
-                i_birth_current = std::min(i_birth_current+1, (int) m_iBirthTargets.size ());
+                i_birth_current = std::min(i_birth_current + 1, (int)m_iBirthTargets.size());
                 m_currTargets->m_gaussians[i].m_weight = 0.f;
             }
 
@@ -548,18 +552,22 @@ private:
             m_currTargets->m_gaussians[i].m_cov  = m_expTargets->m_gaussians[i].m_cov;
         }
 
-
         // Second set of gaussians : match observations and previsions
         if (m_measTargets->m_gaussians.size () == 0)
         {
             return;
         }
 
-        for (n_meas=1; n_meas <= m_measTargets->m_gaussians.size (); ++n_meas)
+        for (unsigned int n_meas = 1; n_meas <= m_measTargets->m_gaussians.size(); ++n_meas)
         {
-            for (n_targt = 0; n_targt < m_nPredTargets; ++n_targt)
+            for (unsigned int n_targt = 0; n_targt < m_nPredTargets; ++n_targt)
             {
-                index = n_meas * m_nPredTargets + n_targt;
+                unsigned int index = n_meas * m_nPredTargets + n_targt;
+
+                if (index >= m_currTargets->m_gaussians.size())
+                {
+                    continue;
+                }
 
                 // Compute matching factor between predictions and measures.
                 m_currTargets->m_gaussians[index].m_weight =  m_pDetection * m_expTargets->m_gaussians[n_targt].m_weight /
@@ -567,17 +575,21 @@ private:
                         m_expMeasure[n_targt].block(0,0,DIM,1),
                         m_expDisp[n_targt].block(0,0, DIM, DIM));
 
-
-                m_currTargets->m_gaussians[index].m_mean =  m_expTargets->m_gaussians[n_targt].m_mean +
+                m_currTargets->m_gaussians[index].m_mean = m_expTargets->m_gaussians[n_targt].m_mean +
                         m_uncertainty[n_targt] * (m_measTargets->m_gaussians[n_meas -1].m_mean - m_expMeasure[n_targt]);
 
                 m_currTargets->m_gaussians[index].m_cov = m_covariance[n_targt];
+
+                if (check_val(m_currTargets->m_gaussians[index].m_mean(0, 0)))
+                {
+                    printf("update Error!!!!");
+                    m_currTargets->m_gaussians.erase(m_currTargets->m_gaussians.begin() + index);
+                }
             }
 
             // Normalize weights in the same predicted set,
             // taking clutter into account
-            m_currTargets->normalize (m_measNoiseBackground, n_meas * m_nPredTargets,
-                                      (n_meas + 1) * m_nPredTargets, 1);
+            m_currTargets->normalize(m_measNoiseBackground, n_meas * m_nPredTargets, (n_meas + 1) * m_nPredTargets, 1);
         }
     }
 
@@ -585,7 +597,6 @@ private:
 private:
     bool  m_bVerbose;
 
-    uint   m_maxGaussians;
     uint   m_nPredTargets;
     uint   m_nCurrentTargets;
     uint   m_nMaxPrune;

@@ -170,7 +170,6 @@ void MotionDetector(cv::CommandLineParser parser)
     }
     cv::namedWindow("Video");
     cv::Mat frame;
-    cv::Mat origGray;
     cv::Mat gray;
 
     bool showLogs = parser.get<int>("show_logs") != 0;
@@ -182,24 +181,9 @@ void MotionDetector(cv::CommandLineParser parser)
     const int fps = std::max(1, cvRound(capture.get(cv::CAP_PROP_FPS)));
 
     capture >> frame;
-    cv::cvtColor(frame, origGray, cv::COLOR_BGR2GRAY);
+    cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
 
-    bool resizeFrame = true;
-
-    int resizeCoeff = 1;
-    cv::Size newSize(origGray.cols, origGray.rows);
     const int minObjWidth = 10;
-    if (resizeFrame)
-    {
-        int minPedestrianWidth = 40;
-        int resizeCoeff = (origGray.cols * minObjWidth) / minPedestrianWidth;
-        cv::Size newSize(origGray.cols / resizeCoeff, origGray.rows / resizeCoeff);
-        cv::resize(origGray, gray, newSize, 0, 0, cv::INTER_LINEAR);
-    }
-    else
-    {
-        gray = origGray;
-    }
 
     // If true then trajectories will be more smooth and accurate
     // But on high resolution videos with many objects may be to slow
@@ -237,16 +221,7 @@ void MotionDetector(cv::CommandLineParser parser)
         {
             break;
         }
-        cv::cvtColor(frame, origGray, cv::COLOR_BGR2GRAY);
-
-        if (resizeCoeff != 1)
-        {
-            cv::resize(origGray, gray, newSize, 0, 0, cv::INTER_LINEAR);
-        }
-        else
-        {
-            gray = origGray;
-        }
+        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
 
         if (!writer.isOpened())
         {
@@ -277,7 +252,7 @@ void MotionDetector(cv::CommandLineParser parser)
                                 cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
                     )
             {
-                DrawTrack(frame, resizeCoeff, *track, colors);
+                DrawTrack(frame, 1, *track, colors);
             }
         }
 
@@ -810,7 +785,6 @@ void GMPHDTracker(cv::CommandLineParser parser)
     }
     cv::namedWindow("Video");
     cv::Mat frame;
-    cv::Mat origGray;
     cv::Mat gray;
 
     bool showLogs = parser.get<int>("show_logs") != 0;
@@ -822,47 +796,32 @@ void GMPHDTracker(cv::CommandLineParser parser)
     const int fps = std::max(1, cvRound(capture.get(cv::CAP_PROP_FPS)));
 
     capture >> frame;
-    cv::cvtColor(frame, origGray, cv::COLOR_BGR2GRAY);
+    cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
 
-    bool resizeFrame = true;
-
-    int resizeCoeff = 1;
-    cv::Size newSize(origGray.cols, origGray.rows);
-    const int minObjWidth = 10;
-    if (resizeFrame)
-    {
-        int minPedestrianWidth = 40;
-        int resizeCoeff = (origGray.cols * minObjWidth) / minPedestrianWidth;
-        cv::Size newSize(origGray.cols / resizeCoeff, origGray.rows / resizeCoeff);
-        cv::resize(origGray, gray, newSize, 0, 0, cv::INTER_LINEAR);
-    }
-    else
-    {
-        gray = origGray;
-    }
+    const int minObjWidth = 2;
 
     // If true then trajectories will be more smooth and accurate
     // But on high resolution videos with many objects may be to slow
     bool useLocalTracking = false;
 
     CDetector detector(BackgroundSubtract::ALG_MOG, useLocalTracking, gray);
-    detector.SetMinObjectSize(cv::Size(minObjWidth, 2 * minObjWidth));
+    detector.SetMinObjectSize(cv::Size(minObjWidth, minObjWidth));
     //detector.SetMinObjectSize(cv::Size(2, 2));
 
     const int dimension = 4;
-    GMPHD<dimension> m_GMPHDTracker(1000, false);
+    GMPHD<dimension> m_GMPHDTracker(true);
     // Birth model (spawn)
     GMPHD<dimension>::GModel Birth;
     Birth.m_weight = 0.2f;
-    Birth.m_mean(0, 0) = origGray.rows / 2;
-    Birth.m_mean(1, 0) = origGray.cols / 2;
+    Birth.m_mean(0, 0) = gray.rows / 2;
+    Birth.m_mean(1, 0) = gray.cols / 2;
     Birth.m_mean(2, 0) = minObjWidth;
-    Birth.m_mean(3, 0) = 2 * minObjWidth;
+    Birth.m_mean(3, 0) = minObjWidth;
     Birth.m_mean(4, 0) = 0.f;
     Birth.m_mean(5, 0) = 0.f;
     Birth.m_mean(6, 0) = 0.f;
     Birth.m_mean(7, 0) = 0.f;
-    Birth.m_cov = (origGray.cols / 2) * Eigen::MatrixXf::Identity(2 * dimension, 2 * dimension);
+    Birth.m_cov = (gray.cols / 2) * Eigen::MatrixXf::Identity(2 * dimension, 2 * dimension);
 
     std::vector<GMPHD<dimension>::GModel> BirthModel = { Birth };
     m_GMPHDTracker.setBirthModel(BirthModel);
@@ -878,7 +837,7 @@ void GMPHDTracker(cv::CommandLineParser parser)
     m_GMPHDTracker.setObservationModel(probDetection, measNoisePose, measNoiseSpeed, measBackground);
 
     // Pruning parameters
-    m_GMPHDTracker.setPruningParameters(0.3f, 3.f, 10);
+    m_GMPHDTracker.setPruningParameters(0.3f, 2.f, 10);
 
     // Spawn (target apparition)
     std::vector<GMPHD<dimension>::SModel> spawnModel(1);
@@ -902,16 +861,7 @@ void GMPHDTracker(cv::CommandLineParser parser)
         {
             break;
         }
-        cv::cvtColor(frame, origGray, cv::COLOR_BGR2GRAY);
-
-        if (resizeCoeff != 1)
-        {
-            cv::resize(origGray, gray, newSize, 0, 0, cv::INTER_LINEAR);
-        }
-        else
-        {
-            gray = origGray;
-        }
+        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
 
         if (!writer.isOpened())
         {
