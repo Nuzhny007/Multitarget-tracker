@@ -806,10 +806,9 @@ void GMPHDTracker(cv::CommandLineParser parser)
 
     CDetector detector(BackgroundSubtract::ALG_MOG, useLocalTracking, gray);
     detector.SetMinObjectSize(cv::Size(minObjWidth, minObjWidth));
-    //detector.SetMinObjectSize(cv::Size(2, 2));
 
     const int dimension = 4;
-    GMPHD<dimension> m_GMPHDTracker(true);
+    GMPHD<dimension> m_GMPHDTracker(false);
     // Birth model (spawn)
     GMPHD<dimension>::GModel Birth;
     Birth.m_weight = 0.2f;
@@ -837,7 +836,7 @@ void GMPHDTracker(cv::CommandLineParser parser)
     m_GMPHDTracker.setObservationModel(probDetection, measNoisePose, measNoiseSpeed, measBackground);
 
     // Pruning parameters
-    m_GMPHDTracker.setPruningParameters(0.3f, 2.f, 10);
+    m_GMPHDTracker.setPruningParameters(0.3f, 2.f, 20);
 
     // Spawn (target apparition)
     std::vector<GMPHD<dimension>::SModel> spawnModel(1);

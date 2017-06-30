@@ -582,7 +582,7 @@ private:
 
                 if (check_val(m_currTargets->m_gaussians[index].m_mean(0, 0)))
                 {
-                    printf("update Error!!!!");
+                    //printf("update Error!!!!");
                     m_currTargets->m_gaussians.erase(m_currTargets->m_gaussians.begin() + index);
                 }
             }

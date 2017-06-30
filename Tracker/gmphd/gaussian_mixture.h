@@ -20,13 +20,13 @@ bool check_val(T val)
     bool i = std::isinf(val);
     bool f = !std::isfinite(val);
     bool neg = val < 0;
-    bool big = val > 1000;
+    bool big = val > 10000;
 
     bool res = n || i || f || neg || big;
 
     if (res)
     {
-        std::cout << "Val " << val << " error!!!" << std::endl;
+        //std::cout << "Val " << val << " error!!!" << std::endl;
         //assert(0);
     }
 
