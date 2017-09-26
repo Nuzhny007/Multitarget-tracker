@@ -90,44 +90,17 @@ private:
 class CTracker
 {
 public:
-    enum DistType
-    {
-        CentersDist = 0,
-        RectsDist = 1
-    };
-    enum FilterGoal
-    {
-        FilterCenter = 0,
-        FilterRect = 1
-    };
-    enum KalmanType
-    {
-        KalmanLinear = 0,
-        KalmanUnscented = 1
-    };
-	enum MatchType
-	{
-		MatchHungrian = 0,
-		MatchBipart = 1
-	};
-    enum LostTrackType
-    {
-        TrackNone = 0,
-        TrackKCF = 1
-    };
-
     CTracker(bool useLocalTracking,
-             DistType distType,
-             KalmanType kalmanType,
-             FilterGoal filterGoal,
-             LostTrackType useExternalTrackerForLostObjects,
-			 MatchType matchType,
+             tracking::DistType distType,
+             tracking::KalmanType kalmanType,
+             tracking::FilterGoal filterGoal,
+             tracking::LostTrackType useExternalTrackerForLostObjects,
+             tracking::MatchType matchType,
              track_t dt_,
              track_t accelNoiseMag_,
              track_t dist_thres_ = 60,
              size_t maximum_allowed_skipped_frames_ = 10,
-             size_t max_trace_length_ = 10,
-             std::string trajectoryFileName = "");
+             size_t max_trace_length_ = 10);
 	~CTracker(void);
 
     tracks_t tracks;
@@ -141,11 +114,11 @@ private:
     // Use local tracking for regions between two frames
     bool m_useLocalTracking;
 
-    DistType m_distType;
-    KalmanType m_kalmanType;
-    FilterGoal m_filterGoal;
-    LostTrackType m_useExternalTrackerForLostObjects;
-	MatchType m_matchType;
+    tracking::DistType m_distType;
+    tracking::KalmanType m_kalmanType;
+    tracking::FilterGoal m_filterGoal;
+    tracking::LostTrackType m_useExternalTrackerForLostObjects;
+    tracking::MatchType m_matchType;
 
 	// Шаг времени опроса фильтра
 	track_t dt;

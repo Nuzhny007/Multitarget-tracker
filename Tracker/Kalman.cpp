@@ -6,7 +6,7 @@
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 TKalmanFilter::TKalmanFilter(
-        KalmanType type,
+        tracking::KalmanType type,
         Point_t pt,
         track_t deltaTime, // time increment (lower values makes target more "massive")
         track_t accelNoiseMag
@@ -23,7 +23,7 @@ TKalmanFilter::TKalmanFilter(
 
 //---------------------------------------------------------------------------
 TKalmanFilter::TKalmanFilter(
-        KalmanType type,
+        tracking::KalmanType type,
         cv::Rect rect,
         track_t deltaTime, // time increment (lower values makes target more "massive")
         track_t accelNoiseMag
@@ -183,6 +183,7 @@ void get_lin_regress_params(
     by = det_1 * (m2 * m3_y + m1 * m4_y);
 }
 
+#if USE_OCV_UKF
 //---------------------------------------------------------------------------
 class AcceleratedModel: public cv::tracking::UkfSystemModel
 {
@@ -447,6 +448,7 @@ void TKalmanFilter::CreateAugmentedUnscented(cv::Rect_<track_t> rect0, Point_t r
 
     m_initialized = true;
 }
+#endif
 
 //---------------------------------------------------------------------------
 Point_t TKalmanFilter::GetPointPrediction()
@@ -457,12 +459,12 @@ Point_t TKalmanFilter::GetPointPrediction()
 
         switch (m_type)
         {
-        case TypeLinear:
+        case tracking::KalmanLinear:
             prediction = m_linearKalman->predict();
             break;
 
-        case TypeUnscented:
-        case TypeAugmentedUnscented:
+        case tracking::KalmanUnscented:
+        case tracking::KalmanAugmentedUnscented:
 #if USE_OCV_UKF
             prediction = m_uncsentedKalman->predict();
 #else
@@ -505,11 +507,11 @@ Point_t TKalmanFilter::Update(Point_t pt, bool dataCorrect)
 
             switch (m_type)
             {
-            case TypeLinear:
+            case tracking::KalmanLinear:
                 CreateLinear(xy0, xyv0);
                 break;
 
-            case TypeUnscented:
+            case tracking::KalmanUnscented:
 #if USE_OCV_UKF
                 CreateUnscented(xy0, xyv0);
 #else
@@ -518,8 +520,13 @@ Point_t TKalmanFilter::Update(Point_t pt, bool dataCorrect)
 #endif
                 break;
 
-            case TypeAugmentedUnscented:
+            case tracking::KalmanAugmentedUnscented:
+#if USE_OCV_UKF
                 CreateAugmentedUnscented(xy0, xyv0);
+#else
+                CreateLinear(xy0, xyv0);
+                std::cerr << "AugmentedUnscentedKalmanFilter was disabled in CMAKE! Set KalmanLinear in constructor." << std::endl;
+#endif
                 break;
             }
         }
@@ -542,12 +549,12 @@ Point_t TKalmanFilter::Update(Point_t pt, bool dataCorrect)
         cv::Mat estimated;
         switch (m_type)
         {
-        case TypeLinear:
+        case tracking::KalmanLinear:
             estimated = m_linearKalman->correct(measurement);
             break;
 
-        case TypeUnscented:
-        case TypeAugmentedUnscented:
+        case tracking::KalmanUnscented:
+        case tracking::KalmanAugmentedUnscented:
 #if USE_OCV_UKF
             estimated = m_uncsentedKalman->correct(measurement);
 #else
@@ -569,8 +576,8 @@ Point_t TKalmanFilter::Update(Point_t pt, bool dataCorrect)
     }
     return m_lastPointResult;
 }
-//---------------------------------------------------------------------------
 
+//---------------------------------------------------------------------------
 cv::Rect TKalmanFilter::GetRectPrediction()
 {
     if (m_initialized)
@@ -579,12 +586,12 @@ cv::Rect TKalmanFilter::GetRectPrediction()
 
         switch (m_type)
         {
-        case TypeLinear:
+        case tracking::KalmanLinear:
             prediction = m_linearKalman->predict();
             break;
 
-        case TypeUnscented:
-        case TypeAugmentedUnscented:
+        case tracking::KalmanUnscented:
+        case tracking::KalmanAugmentedUnscented:
 #if USE_OCV_UKF
             prediction = m_uncsentedKalman->predict();
 #else
@@ -638,11 +645,11 @@ cv::Rect TKalmanFilter::Update(cv::Rect rect, bool dataCorrect)
 
             switch (m_type)
             {
-            case TypeLinear:
+            case tracking::KalmanLinear:
                 CreateLinear(rect0, rectv0);
                 break;
 
-            case TypeUnscented:
+            case tracking::KalmanUnscented:
 #if USE_OCV_UKF
                 CreateUnscented(rect0, rectv0);
 #else
@@ -651,8 +658,13 @@ cv::Rect TKalmanFilter::Update(cv::Rect rect, bool dataCorrect)
 #endif
                 break;
 
-            case TypeAugmentedUnscented:
+            case tracking::KalmanAugmentedUnscented:
+#if USE_OCV_UKF
                 CreateAugmentedUnscented(rect0, rectv0);
+#else
+                CreateLinear(rect0, rectv0);
+                std::cerr << "AugmentedUnscentedKalmanFilter was disabled in CMAKE! Set KalmanLinear in constructor." << std::endl;
+#endif
                 break;
             }
         }
@@ -679,7 +691,7 @@ cv::Rect TKalmanFilter::Update(cv::Rect rect, bool dataCorrect)
         cv::Mat estimated;
         switch (m_type)
         {
-        case TypeLinear:
+        case tracking::KalmanLinear:
             estimated = m_linearKalman->correct(measurement);
 
             m_lastRectResult.x = estimated.at<track_t>(0);   //update using measurements
@@ -688,8 +700,8 @@ cv::Rect TKalmanFilter::Update(cv::Rect rect, bool dataCorrect)
             m_lastRectResult.height = estimated.at<track_t>(3);
             break;
 
-        case TypeUnscented:
-        case TypeAugmentedUnscented:
+        case tracking::KalmanUnscented:
+        case tracking::KalmanAugmentedUnscented:
 #if USE_OCV_UKF
             estimated = m_uncsentedKalman->correct(measurement);
 

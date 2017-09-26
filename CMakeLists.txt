@@ -19,26 +19,41 @@ set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
-# ---------------------------------------------------------------------------- 
+# ----------------------------------------------------------------------------
 # Предполагаем, что FindOpenCV.cmake расположен по адресу CMAKE_MODULE_PATH.
 # ----------------------------------------------------------------------------
   FIND_PACKAGE(OpenCV)
-# ----------------------------------------------------------------------------  
-# ищем все .cpp и .h файлы и добавляем их в наш проект 
+# ----------------------------------------------------------------------------
+# ищем все .cpp и .h файлы и добавляем их в наш проект
 # ----------------------------------------------------------------------------
   set(folder_source  main.cpp
              Detector/Detector.cpp
              Detector/BackgroundSubtract.cpp
              Detector/vibe_src/vibe.cpp
+             Detector/Subsense/BackgroundSubtractorLBSP.cpp
+             Detector/Subsense/BackgroundSubtractorLOBSTER.cpp
+             Detector/Subsense/BackgroundSubtractorSuBSENSE.cpp
+             Detector/Subsense/LBSP.cpp
+
              Tracker/Ctracker.cpp
+             Tracker/track.cpp
              Tracker/HungarianAlg/HungarianAlg.cpp
              Tracker/LocalTracker.cpp
              Tracker/Kalman.cpp)
 
-  set(folder_header
+  set(folder_header MouseExample.h
+             VideoExample.h
+             nms.h
              Detector/Detector.h
              Detector/BackgroundSubtract.h
              Detector/vibe_src/vibe.hpp
+             Detector/Subsense/BackgroundSubtractorLBSP.h
+             Detector/Subsense/BackgroundSubtractorLOBSTER.h
+             Detector/Subsense/BackgroundSubtractorSuBSENSE.h
+             Detector/Subsense/DistanceUtils.h
+             Detector/Subsense/LBSP.h
+             Detector/Subsense/RandUtils.h
+
              pedestrians/c4-pedestrian-detector.h
              Tracker/Ctracker.h
              Tracker/track.h
@@ -145,31 +160,45 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
   SOURCE_GROUP("graph" FILES ${graph_source} ${graph_header})
   SOURCE_GROUP("GTL" FILES ${gtl_source} ${gtl_header})
 
-option(USE_OCV_BGFG "Should use the bgfg algorithms from opencv_contrib?" ON)
-if(USE_OCV_BGFG)
-    add_definitions(-DUSE_OCV_BGFG)
-endif(USE_OCV_BGFG)
+include(CheckIncludeFileCXX)
+check_include_file_cxx(opencv2/bgsegm.hpp HAVE_OPENCV_CONTRIB)
+if(HAVE_OPENCV_CONTRIB)
+    add_definitions(-DHAVE_OPENCV_CONTRIB)
 
-option(USE_OCV_KCF "Should use the KCF tracker from opencv_contrib for collisions resolving?" ON)
+    option(USE_OCV_BGFG "Should use the bgfg algorithms from opencv_contrib?" ON)
+    option(USE_OCV_KCF "Should use the KCF tracker from opencv_contrib for collisions resolving?" ON)
+    option(USE_OCV_UKF "Should use the Unscented Kalman Filterr from opencv_contrib?" ON)
+
+else(HAVE_OPENCV_CONTRIB)
+
+    option(USE_OCV_BGFG "Should use the bgfg algorithms from opencv_contrib?" OFF)
+    option(USE_OCV_KCF "Should use the KCF tracker from opencv_contrib for collisions resolving?" OFF)
+    option(USE_OCV_UKF "Should use the Unscented Kalman Filterr from opencv_contrib?" OFF)
+endif(HAVE_OPENCV_CONTRIB)
+
+if(USE_OCV_UKF)
+    add_definitions(-DUSE_OCV_UKF)
+endif(USE_OCV_UKF)
+
 if(USE_OCV_KCF)
     add_definitions(-DUSE_OCV_KCF)
 endif(USE_OCV_KCF)
 
-option(USE_OCV_UKF "Should use the Unscented Kalman Filterr from opencv_contrib?" ON)
-if(USE_OCV_UKF)
-    add_definitions(-DUSE_OCV_UKF)
-endif(USE_OCV_UKF)
+if(USE_OCV_BGFG)
+    add_definitions(-DUSE_OCV_BGFG)
+endif(USE_OCV_BGFG)
 
 # ----------------------------------------------------------------------------  
 # создаем проект
 # ----------------------------------------------------------------------------
   ADD_EXECUTABLE(MultitargetTracker ${folder_source} ${folder_header} ${graph_source} ${graph_header} ${gtl_source} ${gtl_header})
-# ----------------------------------------------------------------------------   
+# ----------------------------------------------------------------------------
 # добавляем include директории
 # ----------------------------------------------------------------------------
   INCLUDE_DIRECTORIES(
 		      ${PROJECT_SOURCE_DIR}/Detector
-                      ${PROJECT_SOURCE_DIR}/vibe_src
+                      ${PROJECT_SOURCE_DIR}/Detector/vibe_src
+                      ${PROJECT_SOURCE_DIR}/Detector/Subsense
                       ${PROJECT_SOURCE_DIR}/Tracker
                       ${PROJECT_SOURCE_DIR}/Tracker/HungarianAlg
                       ${PROJECT_SOURCE_DIR}/Tracker/graph
@@ -178,7 +207,7 @@ endif(USE_OCV_UKF)
   INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR})
   INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
 # ----------------------------------------------------------------------------
-# и Lib-ы opencv 
+# и Lib-ы opencv
 # ----------------------------------------------------------------------------
 
 
