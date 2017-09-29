@@ -225,7 +225,7 @@ protected:
                                                tracking::MatchHungrian,
                                                0.2f,                     // Delta time for Kalman filter
                                                0.1f,                     // Accel noise magnitude for Kalman filter
-                                               grayFrame.rows / 10,      // Distance threshold between region and object on two frames
+                                               grayFrame.rows / 20,      // Distance threshold between region and object on two frames
                                                m_fps,                    // Maximum allowed skipped frames
                                                3 * m_fps                 // Maximum trace length
                                                );
