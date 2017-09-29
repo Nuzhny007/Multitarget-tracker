@@ -27,7 +27,7 @@ private:
     tracking::KalmanType m_type;
     std::unique_ptr<cv::KalmanFilter> m_linearKalman;
 #if USE_OCV_UKF
-    cv::Ptr<cv::tracking::UnscentedKalmanFilter> m_uncsentedKalman;
+    cv::Ptr<cv::tracking::UnscentedKalmanFilter> m_unscentedKalman;
 #endif
 
     std::deque<Point_t> m_initialPoints;
