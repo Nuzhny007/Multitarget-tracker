@@ -40,7 +40,7 @@ CTracker::CTracker(
       m_maximumAllowedSkippedFrames(maximum_allowed_skipped_frames_),
       m_maxTraceLength(max_trace_length_),
       m_nextTrackID(0),
-      m_useHough3D(false)
+      m_useHough3D(true)
 {
 }
 
@@ -387,7 +387,7 @@ void CTracker::UpdateHough3D(
         int granularity = 4;
         int num_directions[7] = {12, 21, 81, 321, 1281, 5121, 20481};
 
-        track_t opt_dx = d / 64.0;
+        track_t opt_dx = d / 128.0;
 
         track_t num_x = floor(d / opt_dx + 0.5f);
         track_t num_cells = num_x * num_x * num_directions[granularity];
@@ -459,6 +459,7 @@ void CTracker::UpdateHough3D(
                          cv::Scalar(255, 0, 0),
                          2);
             }
+            cv::namedWindow("hough3d", cv::WINDOW_NORMAL);
             cv::imshow("hough3d", dbgLines);
         }
     }

@@ -63,7 +63,7 @@ private:
 
     cv::UMat m_prevFrame;
 
-    static const int Hough3DTimeline = 12;
+    static const int Hough3DTimeline = 24;
     bool m_useHough3D;
     std::deque<std::vector<Point_t>> m_points3D;
 
