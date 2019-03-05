@@ -15,6 +15,9 @@ CTracker::CTracker(const TrackerSettings& settings)
       m_settings(settings),
       m_nextTrackID(0)
 {
+#ifdef BUILD_LBM
+    m_LBMfilter = std::unique_ptr<lmbTracker>(new lmbTracker());
+#endif
 }
 
 ///
@@ -75,13 +78,19 @@ void CTracker::UpdateTrackingState(
         CreateDistaceMatrix(regions, costMatrix, maxPossibleCost, maxCost);
 
         // Solving assignment problem (tracks and predictions of Kalman filter)
-        if (m_settings.m_matchType == tracking::MatchHungrian)
+        switch (m_settings.m_matchType)
         {
+        case tracking::MatchHungrian:
             SolveHungrian(costMatrix, N, M, assignment);
-        }
-        else
-        {
+            break;
+
+        case tracking::MatchBipart:
             SolveBipartiteGraphs(costMatrix, N, M, assignment, maxCost);
+            break;
+
+        case tracking::MatchLBM:
+            SolveLBM(regions, assignment);
+            break;
         }
 
         // clean assignment from pairs with large distance
@@ -132,7 +141,7 @@ void CTracker::UpdateTrackingState(
 
     // Update Kalman Filters state
     const ptrdiff_t stop_i = static_cast<int>(assignment.size());
-#pragma omp parallel for
+//#pragma omp parallel for
     for (int i = 0; i < stop_i; ++i)
     {
         // If track updated less than one time, than filter state is not correct.
@@ -281,4 +290,41 @@ void CTracker::SolveBipartiteGraphs(const distMatrix_t& costMatrix, size_t N, si
         node b = it->target();
         assignment[b.id()] = static_cast<assignments_t::value_type>(a.id() - N);
     }
+}
+
+///
+/// \brief CTracker::SolveLBM
+/// \param costMatrix
+/// \param N
+/// \param M
+/// \param assignment
+///
+void CTracker::SolveLBM(const regions_t& regions, assignments_t& assignment)
+{
+#ifdef BUILD_LBM
+    std::vector<arma::fvec> Zk;
+    Zk.reserve(regions.size());
+
+    for (const CRegion& region : regions)
+    {
+        Zk.emplace_back(arma::fvec({region.m_rect.x + region.m_rect.width / 2.f, region.m_rect.y + region.m_rect.height / 2.f}));
+    }
+
+    std::vector<std::pair<std::pair<unsigned, unsigned>, arma::fvec>> Xk = m_LBMfilter->runFilter(Zk);
+
+    for (auto &x : Xk)
+    {
+        //      std::cout << "<" << x.first.first << "," << x.first.second << ">" << std::endl;
+        //      x.second.print();
+        cv::Rect rect;
+        rect.height = 10;
+        rect.width = 10;
+        rect.x = std::max(0.0, x.second(0) - rect.width / 2.0);
+        rect.y = std::max(0.0, x.second(2) - rect.height / 2.0);
+
+        //assignment[x.first.second] = 1;
+    }
+#else
+    std::cerr << "Project was compiled without LBM tracking! Set BUILD_LBM=ON in CMake " << std::endl;
+#endif
 }

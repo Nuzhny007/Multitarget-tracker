@@ -108,7 +108,8 @@ enum KalmanType
 enum MatchType
 {
     MatchHungrian = 0,
-    MatchBipart = 1
+    MatchBipart = 1,
+    MatchLBM
 };
 
 ///

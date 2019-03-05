@@ -10,6 +10,10 @@
 #include "LocalTracker.h"
 #include "HungarianAlg/HungarianAlg.h"
 
+#ifdef BUILD_LBM
+#include "lbm/lmbTracker.hpp"
+#endif
+
 // ----------------------------------------------------------------------
 
 ///
@@ -105,10 +109,15 @@ private:
 
     cv::UMat m_prevFrame;
 
+#ifdef BUILD_LBM
+    std::unique_ptr<lmbTracker> m_LBMfilter;
+#endif
+
     void CreateDistaceMatrix(const regions_t& regions, distMatrix_t& costMatrix, track_t maxPossibleCost, track_t& maxCost);
 
     void SolveHungrian(const distMatrix_t& costMatrix, size_t N, size_t M, assignments_t& assignment);
     void SolveBipartiteGraphs(const distMatrix_t& costMatrix, size_t N, size_t M, assignments_t& assignment, track_t maxCost);
+    void SolveLBM(const regions_t& regions, assignments_t& assignment);
 
     void UpdateTrackingState(const regions_t& regions, cv::UMat grayFrame, float fps);
 };

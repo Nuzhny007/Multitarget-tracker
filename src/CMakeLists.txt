@@ -40,6 +40,11 @@ if (BUILD_YOLO_LIB)
     set(detector_sources ${detector_sources} Detector/YoloDarknetDetector.cpp Detector/YoloDarknetDetector.h)
 endif()
 
+option(BUILD_LBM "Should compiled LBM trackng algorithm?" OFF)
+if (BUILD_LBM)
+    add_definitions(-DBUILD_LBM)
+endif()
+
   set(tracker_sources
              Tracker/Ctracker.cpp
              Tracker/track.cpp
@@ -146,6 +151,27 @@ endif()
              Tracker/graph/GTL/include/GTL/GTL.h
              )
 
+  if (BUILD_LBM)
+    set(tracker_sources
+        ${tracker_sources}
+        Tracker/lbm/bestAssignments.cpp
+        Tracker/lbm/lmbTracker.cpp
+        Tracker/lbm/main.cpp
+        Tracker/lbm/shortestPaths.cpp
+        Tracker/lbm/simulate.cpp
+        Tracker/lbm/bestAssignments.hpp
+        Tracker/lbm/global.hpp
+        Tracker/lbm/lmbTracker.hpp
+        Tracker/lbm/shortestPaths.hpp
+        Tracker/lbm/simulate.hpp
+        Tracker/lbm/graehl/2heap.h
+        Tracker/lbm/graehl/graph.h
+        Tracker/lbm/graehl/kbest.h
+        Tracker/lbm/graehl/list.h
+        )
+  endif(BUILD_LBM)
+
+
   SOURCE_GROUP("Src" FILES ${main_sources})
 			
   SOURCE_GROUP("Detector" FILES ${detector_sources})
@@ -221,6 +247,10 @@ endif()
 if (BUILD_YOLO_LIB)
     set(LIBS ${LIBS} yolo_lib)
 endif(BUILD_YOLO_LIB)
+
+if (BUILD_LBM)
+    set(LIBS ${LIBS} armadillo)
+endif(BUILD_LBM)
 
 target_link_libraries(${PROJECT_NAME} ${LIBS})
 
