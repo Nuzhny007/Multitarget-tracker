@@ -57,6 +57,15 @@ endif()
              Tracker/HungarianAlg/HungarianAlg.h
              Tracker/LocalTracker.h
              Tracker/Kalman.h
+
+             Tracker/VOTTracker.hpp
+             Tracker/dat/dat_tracker.cpp
+             Tracker/dat/dat_tracker.hpp
+             Tracker/staple/fhog.cpp
+             Tracker/staple/fhog.h
+             Tracker/staple/sse.hpp
+             Tracker/staple/staple_tracker.cpp
+             Tracker/staple/staple_tracker.hpp
 )
 
   set(graph_source
@@ -173,7 +182,6 @@ endif()
 
 
   SOURCE_GROUP("Src" FILES ${main_sources})
-			
   SOURCE_GROUP("Detector" FILES ${detector_sources})
   SOURCE_GROUP("Tracker" FILES ${tracker_sources})
 
@@ -198,14 +206,20 @@ endif(HAVE_OPENCV_CONTRIB)
 
 if(USE_OCV_UKF)
     add_definitions(-DUSE_OCV_UKF)
+else()
+    remove_definitions(-DUSE_OCV_UKF)
 endif(USE_OCV_UKF)
 
 if(USE_OCV_KCF)
     add_definitions(-DUSE_OCV_KCF)
+else()
+    remove_definitions(-DUSE_OCV_KCF)
 endif(USE_OCV_KCF)
 
 if(USE_OCV_BGFG)
     add_definitions(-DUSE_OCV_BGFG)
+else()
+    remove_definitions(-DUSE_OCV_BGFG)
 endif(USE_OCV_BGFG)
 
 
