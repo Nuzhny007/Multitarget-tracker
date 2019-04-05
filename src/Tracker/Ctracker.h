@@ -120,7 +120,7 @@ private:
 
     void SolveHungrian(const distMatrix_t& costMatrix, size_t N, size_t M, assignments_t& assignment);
     void SolveBipartiteGraphs(const distMatrix_t& costMatrix, size_t N, size_t M, assignments_t& assignment, track_t maxCost);
-    void SolveLBM(const regions_t& regions, assignments_t& assignment);
+    void SolveLBM(const regions_t& regions, assignments_t& assignment, cv::Mat gray);
 
     void UpdateTrackingState(const regions_t& regions, cv::UMat grayFrame, float fps);
 };

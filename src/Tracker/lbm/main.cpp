@@ -6,7 +6,8 @@
 #include "lmbTracker.hpp"
 #include "simulate.hpp"
 
-int main() {
+int main()
+{
     lmbTracker filter;
 
 #if 0
@@ -44,7 +45,8 @@ int main() {
         return -1;
     }
     std::string line;
-    while (std::getline(data, line)) {
+    while (std::getline(data, line))
+    {
         int frame;
         float x, y, w, h;
 
@@ -80,9 +82,11 @@ int main() {
 
     std::vector<arma::fvec> Zk;
     std::vector<std::pair<std::pair<unsigned, unsigned>, arma::fvec>> Xk;
+
     cv::VideoCapture vc("../../dataset_videos/KITTI-17/img1/%6d.jpg");
     // cv::VideoCapture vc("../../dataset_videos/PETS09-S2L1/img1/%6d.jpg");
-    if (!vc.isOpened()) {
+    if (!vc.isOpened())
+    {
         std::cout << "image sequence not read" << std::endl;
         return -1;
     }
@@ -90,7 +94,8 @@ int main() {
     vc >> frame;
     cv::VideoWriter vw;
     vw.open("out.avi", cv::VideoWriter::fourcc('x', 'v', 'i', 'd'), 10, frame.size(), true);
-    if (!vw.isOpened()) {
+    if (!vw.isOpened())
+    {
         std::cout << "cant create video writer" << std::endl;
         return -1;
     }
@@ -101,8 +106,10 @@ int main() {
     double WC_frame_time = 0.0;
     unsigned WC_iteration;
     unsigned iteration = 0;
-    while (!frame.empty()) {
-        if (frame_cnt % 2 == 0) {
+    while (!frame.empty())
+    {
+        if (frame_cnt % 2 == 0)
+        {
             vc >> frame;
             frame_cnt++;
             // only processing alternate frames so as to have smoothness in input
@@ -113,7 +120,8 @@ int main() {
         Zk.clear();
         //    std::cout << "Iteration:" << frame_cnt << std::endl << "-------------"
         //    << std::endl;
-        for (auto &d : detections[frame_cnt]) {
+        for (auto &d : detections[frame_cnt])
+        {
             Zk.emplace_back(arma::fvec(
             {(d.x + d.width / (float)2), (d.y + d.height / (float)2)}));
             //      (Zk.end() - 1)->print("meas");
@@ -137,9 +145,9 @@ int main() {
         }
         //    float this_fps = (cv::getTickFrequency() / (cv::getTickCount() -
         //    start));
-        float this_fps =
-                (cv::getTickFrequency() / (cv::getTickCount() - start)) * 2;
-        if (frame_cnt != 1) {
+        float this_fps = (cv::getTickFrequency() / (cv::getTickCount() - start)) * 2;
+        if (frame_cnt != 1)
+        {
             sum_fps += this_fps;
             if (worst_case_fps > this_fps) {
                 worst_case_fps = this_fps;
@@ -149,7 +157,8 @@ int main() {
                     cv::Point(5, 25), cv::FONT_HERSHEY_SIMPLEX, 1.,
                     cv::Scalar(255, 255, 255), 2);
 
-        for (auto &x : Xk) {
+        for (auto &x : Xk)
+        {
             //      std::cout << "<" << x.first.first << "," << x.first.second << ">"
             //      <<
             //      std::endl;

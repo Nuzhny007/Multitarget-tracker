@@ -69,6 +69,11 @@ void CTracker::UpdateTrackingState(
 
     assignments_t assignment(N, -1); // Assignments regions -> tracks
 
+    if (m_settings.m_matchType == tracking::MatchLBM)
+    {
+        SolveLBM(regions, assignment, grayFrame.getMat(cv::ACCESS_READ));
+    }
+
     if (!tracks.empty())
     {
         // Distance matrix between all tracks to all regions
@@ -89,7 +94,7 @@ void CTracker::UpdateTrackingState(
             break;
 
         case tracking::MatchLBM:
-            SolveLBM(regions, assignment);
+            //SolveLBM(regions, assignment);
             break;
         }
 
@@ -299,31 +304,53 @@ void CTracker::SolveBipartiteGraphs(const distMatrix_t& costMatrix, size_t N, si
 /// \param M
 /// \param assignment
 ///
-void CTracker::SolveLBM(const regions_t& regions, assignments_t& assignment)
+void CTracker::SolveLBM(const regions_t& regions, assignments_t& assignment, cv::Mat gray)
 {
 #ifdef BUILD_LBM
     std::vector<arma::fvec> Zk;
     Zk.reserve(regions.size());
 
+    cv::Mat dbg;
+    cv::cvtColor(gray, dbg, cv::COLOR_GRAY2BGR);
+
+    cv::namedWindow("dbg", cv::WINDOW_NORMAL);
+
     for (const CRegion& region : regions)
     {
         Zk.emplace_back(arma::fvec({region.m_rect.x + region.m_rect.width / 2.f, region.m_rect.y + region.m_rect.height / 2.f}));
+
+        cv::rectangle(dbg, region.m_rect, cv::Scalar(0, 255, 0), 1);
+
+        std::cout << "region: " << region.m_rect << std::endl;
     }
+
+    std::cout << "Detections:" << std::endl;
 
     std::vector<std::pair<std::pair<unsigned, unsigned>, arma::fvec>> Xk = m_LBMfilter->runFilter(Zk);
 
+
+
     for (auto &x : Xk)
     {
-        //      std::cout << "<" << x.first.first << "," << x.first.second << ">" << std::endl;
-        //      x.second.print();
         cv::Rect rect;
         rect.height = 10;
         rect.width = 10;
         rect.x = std::max(0.0, x.second(0) - rect.width / 2.0);
         rect.y = std::max(0.0, x.second(2) - rect.height / 2.0);
 
+        std::cout << "<" << x.first.first << ", " << x.first.second << ">: " << rect << std::endl;
+
+        cv::rectangle(dbg, rect, cv::Scalar(255, 0, 0), 1);
+
+        std::string label = std::to_string(x.first.first) + "," + std::to_string(x.first.second);
+        int baseLine = 0;
+        cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+        cv::putText(dbg, label, cv::Point(rect.x, rect.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+
         //assignment[x.first.second] = 1;
     }
+
+    cv::imshow("dbg", dbg);
 #else
     std::cerr << "Project was compiled without LBM tracking! Set BUILD_LBM=ON in CMake " << std::endl;
 #endif
