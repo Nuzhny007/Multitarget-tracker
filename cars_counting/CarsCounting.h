@@ -6,10 +6,6 @@
 #include <iostream>
 #include <vector>
 #include <map>
-#include <thread>
-#include <mutex>
-#include <chrono>
-#include <condition_variable>
 
 // ----------------------------------------------------------------------
 
@@ -249,9 +245,6 @@ protected:
     virtual bool GrayProcessing() const;
 
     virtual bool InitTracker(cv::UMat frame);
-
-    void Detection(cv::Mat frame, cv::UMat grayFrame, regions_t& regions);
-    void Tracking(cv::Mat frame, cv::UMat grayFrame, const regions_t& regions);
 
     virtual void DrawData(cv::Mat frame, int framesCounter, int currTime);
 
