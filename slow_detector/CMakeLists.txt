@@ -3,12 +3,13 @@ cmake_minimum_required (VERSION 3.5)
 project(SlowDetector)
 
 set(SOURCES
-             main.cpp
-             SlowDetector.cpp
+    main.cpp
+    SlowDetector.cpp
 )
 
 set(HEADERS
-             SlowDetector.h
+    SlowDetector.h
+    Queue.h
 )
 
 # ----------------------------------------------------------------------------

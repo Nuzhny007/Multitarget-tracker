@@ -88,7 +88,6 @@ public:
     CTracker(const TrackerSettings& settings);
 	~CTracker(void);
 
-    tracks_t tracks;
     void Update(const regions_t& regions, cv::UMat grayFrame, float fps);
 
     bool GrayFrameToTrack() const
@@ -99,8 +98,15 @@ public:
         return !needColor;
     }
 
+	const tracks_t& GetTracks() const
+	{
+		return m_tracks;
+	}
+
 private:
     TrackerSettings m_settings;
+
+	tracks_t m_tracks;
 
     size_t m_nextTrackID;
 

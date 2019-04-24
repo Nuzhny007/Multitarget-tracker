@@ -306,14 +306,16 @@ bool CarsCounting::InitTracker(cv::UMat frame)
 ///
 void CarsCounting::DrawData(cv::Mat frame, int framesCounter, int currTime)
 {
+	auto tracks = m_tracker->GetTracks();
+
     if (m_showLogs)
     {
-        std::cout << "Frame " << framesCounter << ": tracks = " << m_tracker->tracks.size() << ", time = " << currTime << std::endl;
+        std::cout << "Frame " << framesCounter << ": tracks = " << tracks.size() << ", time = " << currTime << std::endl;
     }
 
     std::set<size_t> currIntersections;
 
-    for (const auto& track : m_tracker->tracks)
+    for (const auto& track : tracks)
     {
         if (track->IsStatic())
         {
