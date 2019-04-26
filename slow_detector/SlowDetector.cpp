@@ -138,10 +138,9 @@ void SlowDetector::Process()
 	cv::cvtColor(firstFrame, firstGray, cv::COLOR_BGR2GRAY);
 	
 	bool stopFlag = false;
-	Gate frameLock;
-	std::thread thDetection(DetectThread, detectorConfig, firstGray, &m_framesQue, &stopFlag, &frameLock);
+	std::thread thDetection(DetectThread, detectorConfig, firstGray, &m_framesQue, &stopFlag);
 	thDetection.detach();
-	std::thread thTracking(TrackingThread, trackerSettings, &m_framesQue, &stopFlag, &frameLock);
+	std::thread thTracking(TrackingThread, trackerSettings, &m_framesQue, &stopFlag);
 	thTracking.detach();
 
 	cv::namedWindow("Video", cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO);
@@ -159,7 +158,7 @@ void SlowDetector::Process()
         }
         cv::cvtColor(frameInfo.m_frame, frameInfo.m_gray, cv::COLOR_BGR2GRAY);
 		
-		m_framesQue.enqueue(frameInfo);
+		m_framesQue.AddNewFrame(frameInfo);
 
         if (!writer.isOpened())
         {
@@ -169,7 +168,7 @@ void SlowDetector::Process()
 
         int64 t1 = cv::getTickCount();
 
-        
+		FrameInfo processedFrame = m_framesQue.GetFirstProcessedFrame();
 
         int64 t2 = cv::getTickCount();
 
@@ -319,22 +318,23 @@ void SlowDetector::DrawData(FrameInfo* frameInfo, int framesCounter, int currTim
 /// \brief SlowDetector::DetectThread
 /// \param
 ///
-void SlowDetector::DetectThread(const config_t& config, cv::UMat firstGray, SafeQueue<FrameInfo>* framesQue, bool* stopFlag, Gate* frameLock)
+void SlowDetector::DetectThread(const config_t& config, cv::UMat firstGray, FramesQueue* framesQue, bool* stopFlag)
 {
 	std::unique_ptr<BaseDetector> detector = std::unique_ptr<BaseDetector>(CreateDetector(tracking::Detectors::Yolo_OCV, config, false, firstGray));
 	detector->SetMinObjectSize(cv::Size(firstGray.cols / 50, firstGray.cols / 50));
 
 	for (; !(*stopFlag);)
 	{
-		FrameInfo frameInfo = framesQue->dequeue();
+		FrameInfo& frameInfo = framesQue->GetLastUndetectedFrame();
 
-		frameInfo.m_inDetector = 1;
 		cv::UMat clFrame = frameInfo.m_frame.getUMat(cv::ACCESS_READ);
 		detector->Detect(clFrame);
-		frameInfo.m_inDetector = 2;
 
 		const regions_t& regions = detector->GetDetects();
 		frameInfo.m_regions.assign(regions.begin(), regions.end());
+
+		frameInfo.m_inDetector = 2;
+		framesQue->Signal();
 	}
 }
 
@@ -342,13 +342,13 @@ void SlowDetector::DetectThread(const config_t& config, cv::UMat firstGray, Safe
 /// \brief SlowDetector::TrackingThread
 /// \param
 ///
-void SlowDetector::TrackingThread(const TrackerSettings& settings, SafeQueue<FrameInfo>* framesQue, bool* stopFlag, Gate* frameLock)
+void SlowDetector::TrackingThread(const TrackerSettings& settings, FramesQueue* framesQue, bool* stopFlag)
 {
 	std::unique_ptr<CTracker> tracker = std::make_unique<CTracker>(settings);
 
 	for (; !(*stopFlag);)
 	{
-		FrameInfo frameInfo = framesQue->dequeue();
+		FrameInfo& frameInfo = framesQue->GetFirstDetectedFrame();
 		if (tracker->GrayFrameToTrack())
 		{
 			tracker->Update(frameInfo.m_regions, frameInfo.m_gray, frameInfo.m_fps);
@@ -360,5 +360,7 @@ void SlowDetector::TrackingThread(const TrackerSettings& settings, SafeQueue<Fra
 		}
 		
 		frameInfo.m_tracks = tracker->GetTracks();
+		frameInfo.m_inTracker = 1;
+		framesQue->Signal();
 	}
 }
