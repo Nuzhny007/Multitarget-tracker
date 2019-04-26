@@ -90,8 +90,9 @@ private:
 		cv::Mat m_frame;
 		cv::UMat m_gray;
 		regions_t m_regions;
-		tracks_t m_tracks;
+		std::vector<TrackingObject> m_tracks;
 		int64 m_dt = 0;
+		float m_fps = 0;
 
 		int m_inDetector = 0; // 0 - not in Detector, 1 - detector start processing, 2 - objects was detected
 	};
@@ -109,10 +110,9 @@ private:
 
 	void DrawTrack(cv::Mat frame,
 		int resizeCoeff,
-		const CTrack& track,
-		bool drawTrajectory = true,
-		bool isStatic = false);
+		const TrackingObject& track,
+		bool drawTrajectory = true);
 
-	static void DetectThread(SafeQueue<FrameInfo>* framesQue, bool* stopFlag, Gate* frameLock);
-	static void TrackingThread(SafeQueue<FrameInfo>* framesQue, bool* stopFlag, Gate* frameLock);
+	static void DetectThread(const config_t& config, cv::UMat firstGray, SafeQueue<FrameInfo>* framesQue, bool* stopFlag, Gate* frameLock);
+	static void TrackingThread(const TrackerSettings& settings, SafeQueue<FrameInfo>* framesQue, bool* stopFlag, Gate* frameLock);
 };

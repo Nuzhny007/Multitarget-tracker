@@ -102,14 +102,14 @@ void MouseTracking(cv::CommandLineParser parser)
         {
             const auto& track = tracks[i];
 
-            if (track->m_trace.size() > 1)
+            if (track.m_trace.size() > 1)
             {
-                for (size_t j = 0; j < track->m_trace.size() - 1; j++)
+                for (size_t j = 0; j < track.m_trace.size() - 1; j++)
                 {
 #if (CV_VERSION_MAJOR >= 4)
-                    cv::line(frame, track->m_trace[j], track->m_trace[j + 1], colors[i % colors.size()], 2, cv::LINE_AA);
+                    cv::line(frame, track.m_trace[j], track.m_trace[j + 1], colors[i % colors.size()], 2, cv::LINE_AA);
 #else
-					cv::line(frame, track->m_trace[j], track->m_trace[j + 1], colors[i % colors.size()], 2, CV_AA);
+					cv::line(frame, track.m_trace[j], track.m_trace[j + 1], colors[i % colors.size()], 2, CV_AA);
 #endif
                 }
             }

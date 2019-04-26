@@ -250,9 +250,8 @@ protected:
 
     void DrawTrack(cv::Mat frame,
                    int resizeCoeff,
-                   const CTrack& track,
-                   bool drawTrajectory = true,
-                   bool isStatic = false);
+                   const TrackingObject& track,
+                   bool drawTrajectory = true);
 
 private:
 
@@ -268,6 +267,6 @@ private:
 
     // Road lines
     std::deque<RoadLine> m_lines;
-    void CheckLinesIntersection(const CTrack& track, float xMax, float yMax, std::set<size_t>& currIntersections);
+    void CheckLinesIntersection(const TrackingObject& track, float xMax, float yMax, std::set<size_t>& currIntersections);
     std::set<size_t> m_lastIntersections;
 };

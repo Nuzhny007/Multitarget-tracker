@@ -73,13 +73,81 @@ void SlowDetector::Process()
     capture.set(cv::CAP_PROP_POS_FRAMES, m_startFrame);
 
     m_fps = std::max(1.f, (float)capture.get(cv::CAP_PROP_FPS));
+	int frameWidth = cvRound(capture.get(cv::CAP_PROP_FRAME_WIDTH));
+	int frameHeight = cvRound(capture.get(cv::CAP_PROP_FRAME_HEIGHT));
 
-    m_fps = std::max(1.f, (float)capture.get(cv::CAP_PROP_FPS));
+	// Detector
+	config_t detectorConfig;
+	const int yoloModel = 0;
+
+#ifdef _WIN32
+	std::string pathToModel = "../../data/";
+#else
+	std::string pathToModel = "../data/";
+#endif
+
+	switch (yoloModel)
+	{
+	case 0:
+		detectorConfig["modelConfiguration"] = pathToModel + "tiny-yolo.cfg";
+		detectorConfig["modelBinary"] = pathToModel + "tiny-yolo.weights";
+		break;
+
+	case 1:
+		detectorConfig["modelConfiguration"] = pathToModel + "yolov3-tiny.cfg";
+		detectorConfig["modelBinary"] = pathToModel + "yolov3-tiny.weights";
+		detectorConfig["classNames"] = pathToModel + "coco.names";
+		break;
+	}
+
+	detectorConfig["confidenceThreshold"] = "0.1";
+	detectorConfig["maxCropRatio"] = "2.0";
+	detectorConfig["dnnTarget"] = "DNN_TARGET_CPU";
+	detectorConfig["dnnBackend"] = "DNN_BACKEND_INFERENCE_ENGINE";
+
+	// Tracker
+	const int minStaticTime = 5;
+
+	TrackerSettings trackerSettings;
+	trackerSettings.m_useLocalTracking = false;
+	trackerSettings.m_distType = tracking::DistCenters;
+	trackerSettings.m_kalmanType = tracking::KalmanLinear;
+	trackerSettings.m_filterGoal = tracking::FilterRect;
+	trackerSettings.m_lostTrackType = tracking::TrackCSRT; // Use KCF tracker for collisions resolving
+	trackerSettings.m_matchType = tracking::MatchHungrian;
+	trackerSettings.m_dt = 0.5f;                             // Delta time for Kalman filter
+	trackerSettings.m_accelNoiseMag = 0.5f;                  // Accel noise magnitude for Kalman filter
+	trackerSettings.m_distThres = frameHeight / 15.f;         // Distance threshold between region and object on two frames
+
+	trackerSettings.m_useAbandonedDetection = false;
+	if (trackerSettings.m_useAbandonedDetection)
+	{
+		trackerSettings.m_minStaticTime = minStaticTime;
+		trackerSettings.m_maxStaticTime = 60;
+		trackerSettings.m_maximumAllowedSkippedFrames = cvRound(trackerSettings.m_minStaticTime * m_fps); // Maximum allowed skipped frames
+		trackerSettings.m_maxTraceLength = 2 * trackerSettings.m_maximumAllowedSkippedFrames;        // Maximum trace length
+	}
+	else
+	{
+		trackerSettings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
+		trackerSettings.m_maxTraceLength = cvRound(4 * m_fps);              // Maximum trace length
+	}
+
+	// Capture the first frame
+	FrameInfo frameInfo;
+	capture >> frameInfo.m_frame;
+	cv::cvtColor(frameInfo.m_frame, frameInfo.m_gray, cv::COLOR_BGR2GRAY);
+	frameInfo.m_fps = m_fps;
+	
+	bool stopFlag = false;
+	Gate frameLock;
+	std::thread thDetection(DetectThread, detectorConfig, frameInfo.m_gray, &m_framesQue, &stopFlag, &frameLock);
+	thDetection.detach();
+	std::thread thTracking(TrackingThread, trackerSettings, &m_framesQue, &stopFlag, &frameLock);
+	thTracking.detach();
 
     for (;;)
     {
-		FrameInfo frameInfo;
-
         capture >> frameInfo.m_frame;
         if (frameInfo.m_frame.empty())
         {
@@ -87,7 +155,6 @@ void SlowDetector::Process()
             break;
         }
         cv::cvtColor(frameInfo.m_frame, frameInfo.m_gray, cv::COLOR_BGR2GRAY);
-
 		
 		m_framesQue.enqueue(frameInfo);
 
@@ -133,6 +200,17 @@ void SlowDetector::Process()
         }
     }
 
+	std::cout << "Stopping threads..." << std::endl;
+	stopFlag = true;
+	if (thDetection.joinable())
+	{
+		thDetection.join();
+	}
+	if (thTracking.joinable())
+	{
+		thTracking.join();
+	}
+
     std::cout << "work time = " << (allTime / freq) << std::endl;
     cv::waitKey(m_finishDelay);
 }
@@ -147,9 +225,8 @@ void SlowDetector::Process()
 ///
 void SlowDetector::DrawTrack(cv::Mat frame,
                              int resizeCoeff,
-                             const CTrack& track,
-                             bool drawTrajectory,
-                             bool isStatic
+                             const TrackingObject& track,
+                             bool drawTrajectory
         )
 {
     auto ResizeRect = [&](const cv::Rect& r) -> cv::Rect
@@ -161,26 +238,26 @@ void SlowDetector::DrawTrack(cv::Mat frame,
         return cv::Point(resizeCoeff * pt.x, resizeCoeff * pt.y);
     };
 
-    if (isStatic)
+    if (track.m_isStatic)
     {
 #if (CV_VERSION_MAJOR >= 4)
-        cv::rectangle(frame, ResizeRect(track.GetLastRect()), cv::Scalar(255, 0, 255), 2, cv::LINE_AA);
+        cv::rectangle(frame, ResizeRect(track.m_rect), cv::Scalar(255, 0, 255), 2, cv::LINE_AA);
 #else
-		cv::rectangle(frame, ResizeRect(track.GetLastRect()), cv::Scalar(255, 0, 255), 2, CV_AA);
+		cv::rectangle(frame, ResizeRect(track.m_rect), cv::Scalar(255, 0, 255), 2, CV_AA);
 #endif
     }
     else
     {
 #if (CV_VERSION_MAJOR >= 4)
-        cv::rectangle(frame, ResizeRect(track.GetLastRect()), cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
+        cv::rectangle(frame, ResizeRect(track.m_rect), cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
 #else
-		cv::rectangle(frame, ResizeRect(track.GetLastRect()), cv::Scalar(0, 255, 0), 1, CV_AA);
+		cv::rectangle(frame, ResizeRect(track.m_rect), cv::Scalar(0, 255, 0), 1, CV_AA);
 #endif
     }
 
     if (drawTrajectory)
     {
-        cv::Scalar cl = m_colors[track.m_trackID % m_colors.size()];
+        cv::Scalar cl = m_colors[track.m_ID % m_colors.size()];
 
         for (size_t j = 0; j < track.m_trace.size() - 1; ++j)
         {
@@ -217,18 +294,18 @@ void SlowDetector::DrawData(FrameInfo* frameInfo, int framesCounter, int currTim
 	
     for (const auto& track : frameInfo->m_tracks)
     {
-        if (track->IsStatic())
+        if (track.m_isStatic)
         {
-            DrawTrack(frameInfo->m_frame, 1, *track, true, true);
+            DrawTrack(frameInfo->m_frame, 1, track, true);
         }
         else
         {
-            if (track->IsRobust(cvRound(m_fps / 4),          // Minimal trajectory size
+            if (track.IsRobust(cvRound(m_fps / 4),          // Minimal trajectory size
                                 0.7f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
                                 cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
                     )
             {
-                DrawTrack(frameInfo->m_frame, 1, *track, true);
+                DrawTrack(frameInfo->m_frame, 1, track, true);
             }
         }
     }
@@ -238,44 +315,19 @@ void SlowDetector::DrawData(FrameInfo* frameInfo, int framesCounter, int currTim
 /// \brief SlowDetector::DetectThread
 /// \param
 ///
-void SlowDetector::DetectThread(SafeQueue<FrameInfo>* framesQue, bool* stopFlag, Gate* frameLock)
+void SlowDetector::DetectThread(const config_t& config, cv::UMat firstGray, SafeQueue<FrameInfo>* framesQue, bool* stopFlag, Gate* frameLock)
 {
-	config_t config;
-	const int yoloModel = 0;
-
-#ifdef _WIN32
-	std::string pathToModel = "../../data/";
-#else
-	std::string pathToModel = "../data/";
-#endif
-
-	switch (yoloModel)
-	{
-	case 0:
-		config["modelConfiguration"] = pathToModel + "tiny-yolo.cfg";
-		config["modelBinary"] = pathToModel + "tiny-yolo.weights";
-		break;
-
-	case 1:
-		config["modelConfiguration"] = pathToModel + "yolov3-tiny.cfg";
-		config["modelBinary"] = pathToModel + "yolov3-tiny.weights";
-		config["classNames"] = pathToModel + "coco.names";
-		break;
-	}
-
-	config["confidenceThreshold"] = "0.1";
-	config["maxCropRatio"] = "2.0";
-	config["dnnTarget"] = "DNN_TARGET_CPU";
-	config["dnnBackend"] = "DNN_BACKEND_INFERENCE_ENGINE";
-
-	FrameInfo frameInfo = framesQue->dequeue();
-
-	std::unique_ptr<BaseDetector> detector = std::unique_ptr<BaseDetector>(CreateDetector(tracking::Detectors::Yolo_OCV, config, false, frameInfo.m_gray));
-	detector->SetMinObjectSize(cv::Size(frameInfo.m_frame.cols / 50, frameInfo.m_frame.cols / 50));
+	std::unique_ptr<BaseDetector> detector = std::unique_ptr<BaseDetector>(CreateDetector(tracking::Detectors::Yolo_OCV, config, false, firstGray));
+	detector->SetMinObjectSize(cv::Size(firstGray.cols / 50, firstGray.cols / 50));
 
 	for (; !(*stopFlag);)
 	{
-		detector->Detect(frameInfo.m_frame.getUMat(cv::ACCESS_READ));
+		FrameInfo frameInfo = framesQue->dequeue();
+
+		frameInfo.m_inDetector = 1;
+		cv::UMat clFrame = frameInfo.m_frame.getUMat(cv::ACCESS_READ);
+		detector->Detect(clFrame);
+		frameInfo.m_inDetector = 2;
 
 		const regions_t& regions = detector->GetDetects();
 		frameInfo.m_regions.assign(regions.begin(), regions.end());
@@ -286,39 +338,23 @@ void SlowDetector::DetectThread(SafeQueue<FrameInfo>* framesQue, bool* stopFlag,
 /// \brief SlowDetector::TrackingThread
 /// \param
 ///
-void SlowDetector::TrackingThread(SafeQueue<FrameInfo>* framesQue, bool* stopFlag, Gate* frameLock)
+void SlowDetector::TrackingThread(const TrackerSettings& settings, SafeQueue<FrameInfo>* framesQue, bool* stopFlag, Gate* frameLock)
 {
-	const int minStaticTime = 5;
-
-	TrackerSettings settings;
-	settings.m_useLocalTracking = false;
-	settings.m_distType = tracking::DistCenters;
-	settings.m_kalmanType = tracking::KalmanLinear;
-	settings.m_filterGoal = tracking::FilterRect;
-	settings.m_lostTrackType = tracking::TrackCSRT; // Use KCF tracker for collisions resolving
-	settings.m_matchType = tracking::MatchHungrian;
-	settings.m_dt = 0.5f;                             // Delta time for Kalman filter
-	settings.m_accelNoiseMag = 0.5f;                  // Accel noise magnitude for Kalman filter
-	settings.m_distThres = frame.rows / 15.f;         // Distance threshold between region and object on two frames
-
-	settings.m_useAbandonedDetection = false;
-	if (settings.m_useAbandonedDetection)
-	{
-		settings.m_minStaticTime = minStaticTime;
-		settings.m_maxStaticTime = 60;
-		settings.m_maximumAllowedSkippedFrames = cvRound(settings.m_minStaticTime * m_fps); // Maximum allowed skipped frames
-		settings.m_maxTraceLength = 2 * settings.m_maximumAllowedSkippedFrames;        // Maximum trace length
-	}
-	else
-	{
-		settings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
-		settings.m_maxTraceLength = cvRound(4 * m_fps);              // Maximum trace length
-	}
-
 	std::unique_ptr<CTracker> tracker = std::make_unique<CTracker>(settings);
 
 	for (; !(*stopFlag);)
 	{
-		tracker->Update(regions, tracker->GrayFrameToTrack() ? grayFrame : clFrame, m_fps);
+		FrameInfo frameInfo = framesQue->dequeue();
+		if (tracker->GrayFrameToTrack())
+		{
+			tracker->Update(frameInfo.m_regions, frameInfo.m_gray, frameInfo.m_fps);
+		}
+		else
+		{
+			cv::UMat clFrame = frameInfo.m_frame.getUMat(cv::ACCESS_READ);
+			tracker->Update(frameInfo.m_regions, clFrame, frameInfo.m_fps);
+		}
+		
+		frameInfo.m_tracks = tracker->GetTracks();
 	}
 }

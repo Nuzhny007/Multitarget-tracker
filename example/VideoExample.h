@@ -109,10 +109,9 @@ protected:
 
     void DrawTrack(cv::Mat frame,
                    int resizeCoeff,
-                   const CTrack& track,
-                   bool drawTrajectory = true,
-                   bool isStatic = false
-                   );
+                   const TrackingObject& track,
+                   bool drawTrajectory = true);
+
 private:
     bool m_isTrackerInitialized;
     std::string m_inFile;
@@ -222,18 +221,18 @@ protected:
 
         for (const auto& track : tracks)
         {
-            if (track->IsStatic())
+            if (track.m_isStatic)
             {
-                DrawTrack(frame, 1, *track, true, true);
+                DrawTrack(frame, 1, track, true);
             }
             else
             {
-                if (track->IsRobust(cvRound(m_fps / 4),          // Minimal trajectory size
+                if (track.IsRobust(cvRound(m_fps / 4),          // Minimal trajectory size
                                     0.7f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
                                     cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
                         )
                 {
-                    DrawTrack(frame, 1, *track, true);
+                    DrawTrack(frame, 1, track, true);
                 }
             }
         }
@@ -314,12 +313,12 @@ protected:
 
         for (const auto& track : tracks)
         {
-            if (track->IsRobust(8,                           // Minimal trajectory size
+            if (track.IsRobust(8,                           // Minimal trajectory size
                                 0.4f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
                                 cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
                     )
             {
-                DrawTrack(frame, 1, *track);
+                DrawTrack(frame, 1, track);
             }
         }
 
@@ -401,12 +400,12 @@ protected:
 
         for (const auto& track : tracks)
         {
-			if (track->IsRobust(cvRound(m_fps / 2),          // Minimal trajectory size
+			if (track.IsRobust(cvRound(m_fps / 2),          // Minimal trajectory size
                                 0.4f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
                                 cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
                     )
             {
-                DrawTrack(frame, 1, *track);
+                DrawTrack(frame, 1, track);
             }
         }
 
@@ -488,23 +487,23 @@ protected:
 
         for (const auto& track : tracks)
         {
-            if (track->IsRobust(5,                           // Minimal trajectory size
+            if (track.IsRobust(5,                           // Minimal trajectory size
                                 0.2f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
                                 cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
                     )
             {
-                DrawTrack(frame, 1, *track);
+                DrawTrack(frame, 1, track);
 
-                std::string label = track->m_lastRegion.m_type + ": " + std::to_string(track->m_lastRegion.m_confidence);
+                std::string label = track.m_type + ": " + std::to_string(track.m_confidence);
                 int baseLine = 0;
                 cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
-                auto rect(track->GetLastRect());
+
 #if (CV_VERSION_MAJOR >= 4)
-                cv::rectangle(frame, cv::Rect(cv::Point(rect.x, rect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(255, 255, 255), cv::FILLED);
+                cv::rectangle(frame, cv::Rect(cv::Point(track.m_rect.x, track.m_rect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(255, 255, 255), cv::FILLED);
 #else
-				cv::rectangle(frame, cv::Rect(cv::Point(rect.x, rect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(255, 255, 255), CV_FILLED);
+				cv::rectangle(frame, cv::Rect(cv::Point(track.m_rect.x, track.m_rect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(255, 255, 255), CV_FILLED);
 #endif
-                cv::putText(frame, label, cv::Point(rect.x, rect.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+                cv::putText(frame, label, cv::Point(track.m_rect.x, track.m_rect.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
             }
         }
 
@@ -612,23 +611,22 @@ protected:
 
         for (const auto& track : tracks)
         {
-            if (track->IsRobust(1,                           // Minimal trajectory size
+            if (track.IsRobust(1,                           // Minimal trajectory size
                                 0.1f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
                                 cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
                     )
             {
-                DrawTrack(frame, 1, *track);
+                DrawTrack(frame, 1, track);
 
-                std::string label = track->m_lastRegion.m_type + ": " + std::to_string(track->m_lastRegion.m_confidence);
+                std::string label = track.m_type + ": " + std::to_string(track.m_confidence);
                 int baseLine = 0;
                 cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
-                auto rect(track->GetLastRect());
 #if (CV_VERSION_MAJOR >= 4)
-                cv::rectangle(frame, cv::Rect(cv::Point(rect.x, rect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(255, 255, 255), cv::FILLED);
+                cv::rectangle(frame, cv::Rect(cv::Point(track.m_rect.x, track.m_rect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(255, 255, 255), cv::FILLED);
 #else
-				cv::rectangle(frame, cv::Rect(cv::Point(rect.x, rect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(255, 255, 255), CV_FILLED);
+				cv::rectangle(frame, cv::Rect(cv::Point(track.m_rect.x, track.m_rect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(255, 255, 255), CV_FILLED);
 #endif
-                cv::putText(frame, label, cv::Point(rect.x, rect.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+                cv::putText(frame, label, cv::Point(track.m_rect.x, track.m_rect.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
             }
         }
 
@@ -723,17 +721,17 @@ protected:
 
 		for (const auto& track : tracks)
 		{
-			if (track->IsRobust(1,                           // Minimal trajectory size
+			if (track.IsRobust(1,                           // Minimal trajectory size
 				0.1f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
 				cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
 				)
 			{
-				DrawTrack(frame, 1, *track);
+				DrawTrack(frame, 1, track);
 
-				std::string label = track->m_lastRegion.m_type + ": " + std::to_string(track->m_lastRegion.m_confidence);
+				std::string label = track.m_type + ": " + std::to_string(track.m_confidence);
 				int baseLine = 0;
 				cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
-				auto rect(track->GetLastRect());
+				auto rect(track.m_rect);
 #if (CV_VERSION_MAJOR >= 4)
 				cv::rectangle(frame, cv::Rect(cv::Point(rect.x, rect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(255, 255, 255), cv::FILLED);
 #else

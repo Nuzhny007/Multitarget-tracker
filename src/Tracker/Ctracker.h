@@ -98,9 +98,24 @@ public:
         return !needColor;
     }
 
-	const tracks_t& GetTracks() const
+	size_t GetTracksCount() const
 	{
-		return m_tracks;
+		return m_tracks.size();
+	}
+	std::vector<TrackingObject> GetTracks() const
+	{
+		std::vector<TrackingObject> tracks;
+		if (!m_tracks.empty())
+		{
+			tracks.reserve(m_tracks.size());
+			for (const auto& track : m_tracks)
+			{
+				tracks.emplace_back(track->GetLastRect(), track->m_trackID, track->m_trace,
+					track->IsStatic(), track->IsOutOfTheFrame(),
+					track->m_lastRegion.m_type, track->m_lastRegion.m_confidence);
+			}
+		}
+		return tracks;
 	}
 
 private:
