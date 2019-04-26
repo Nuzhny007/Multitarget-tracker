@@ -45,8 +45,6 @@ void SlowDetector::Process()
 {
     cv::VideoWriter writer;
 
-    cv::namedWindow("Video", cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO);
-
     int k = 0;
 
     double freq = cv::getTickFrequency();
@@ -134,20 +132,25 @@ void SlowDetector::Process()
 	}
 
 	// Capture the first frame
-	FrameInfo frameInfo;
-	capture >> frameInfo.m_frame;
-	cv::cvtColor(frameInfo.m_frame, frameInfo.m_gray, cv::COLOR_BGR2GRAY);
-	frameInfo.m_fps = m_fps;
+	cv::Mat firstFrame;
+	cv::UMat firstGray;
+	capture >> firstFrame;
+	cv::cvtColor(firstFrame, firstGray, cv::COLOR_BGR2GRAY);
 	
 	bool stopFlag = false;
 	Gate frameLock;
-	std::thread thDetection(DetectThread, detectorConfig, frameInfo.m_gray, &m_framesQue, &stopFlag, &frameLock);
+	std::thread thDetection(DetectThread, detectorConfig, firstGray, &m_framesQue, &stopFlag, &frameLock);
 	thDetection.detach();
 	std::thread thTracking(TrackingThread, trackerSettings, &m_framesQue, &stopFlag, &frameLock);
 	thTracking.detach();
 
+	cv::namedWindow("Video", cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO);
+	cv::imshow("Video", firstFrame);
+	cv::waitKey(1);
+
     for (;;)
     {
+		FrameInfo frameInfo;
         capture >> frameInfo.m_frame;
         if (frameInfo.m_frame.empty())
         {
@@ -161,6 +164,7 @@ void SlowDetector::Process()
         if (!writer.isOpened())
         {
             writer.open(m_outFile, cv::VideoWriter::fourcc('H', 'F', 'Y', 'U'), m_fps, frameInfo.m_frame.size(), true);
+			writer << firstFrame;
         }
 
         int64 t1 = cv::getTickCount();
