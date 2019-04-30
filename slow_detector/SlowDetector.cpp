@@ -76,7 +76,6 @@ void SlowDetector::Process()
 
 	// Detector
 	config_t detectorConfig;
-	const int yoloModel = 0;
 
 #ifdef _WIN32
 	std::string pathToModel = "../../data/";
@@ -84,24 +83,11 @@ void SlowDetector::Process()
 	std::string pathToModel = "../data/";
 #endif
 
-	switch (yoloModel)
-	{
-	case 0:
-		detectorConfig["modelConfiguration"] = pathToModel + "tiny-yolo.cfg";
-		detectorConfig["modelBinary"] = pathToModel + "tiny-yolo.weights";
-		break;
-
-	case 1:
-		detectorConfig["modelConfiguration"] = pathToModel + "yolov3-tiny.cfg";
-		detectorConfig["modelBinary"] = pathToModel + "yolov3-tiny.weights";
-		detectorConfig["classNames"] = pathToModel + "coco.names";
-		break;
-	}
-
+	detectorConfig["modelConfiguration"] = pathToModel + "yolov3-tiny.cfg";
+	detectorConfig["modelBinary"] = pathToModel + "yolov3-tiny.weights";
+	detectorConfig["classNames"] = pathToModel + "coco.names";
 	detectorConfig["confidenceThreshold"] = "0.1";
 	detectorConfig["maxCropRatio"] = "2.0";
-	detectorConfig["dnnTarget"] = "DNN_TARGET_CPU";
-	detectorConfig["dnnBackend"] = "DNN_BACKEND_INFERENCE_ENGINE";
 
 	// Tracker
 	const int minStaticTime = 5;
@@ -320,7 +306,7 @@ void SlowDetector::DrawData(FrameInfo* frameInfo, int framesCounter, int currTim
 ///
 void SlowDetector::DetectThread(const config_t& config, cv::UMat firstGray, FramesQueue* framesQue, bool* stopFlag)
 {
-	std::unique_ptr<BaseDetector> detector = std::unique_ptr<BaseDetector>(CreateDetector(tracking::Detectors::Yolo_OCV, config, false, firstGray));
+	std::unique_ptr<BaseDetector> detector = std::unique_ptr<BaseDetector>(CreateDetector(tracking::Detectors::Yolo_Darknet, config, false, firstGray));
 	detector->SetMinObjectSize(cv::Size(firstGray.cols / 50, firstGray.cols / 50));
 
 	for (; !(*stopFlag);)
