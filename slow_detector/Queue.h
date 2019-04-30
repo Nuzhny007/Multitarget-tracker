@@ -40,7 +40,7 @@ protected:
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		m_que.push_back(t);
-		m_cond.notify_one();
+		m_cond.notify_all();
 	}
 
 	///
@@ -55,7 +55,7 @@ protected:
 		{
 			m_que.pop();
 		}
-		m_cond.notify_one();
+		m_cond.notify_all();
 	}
 
 	///
@@ -67,7 +67,7 @@ protected:
 		std::lock_guard<std::mutex> lock(m_mutex);
 		m_que.push(t);
 		RET_V ret = F(m_que.front());
-		m_cond.notify_one();
+		m_cond.notify_all();
 
 		return ret;
 	}
