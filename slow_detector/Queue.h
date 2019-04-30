@@ -140,7 +140,7 @@ public:
 			}
 			return res;
 		};
-		while (SearchUntracked(m_que) != -1)
+		while (SearchUntracked(m_que) == -1)
 		{
 			m_cond.wait(lock);
 		}
