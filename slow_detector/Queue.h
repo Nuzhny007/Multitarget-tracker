@@ -178,7 +178,7 @@ public:
         while (m_que.empty() || m_que.back().m_inDetector)
         {
             m_cond.wait(lock);
-            PrintQue();
+            //PrintQue();
         }
         FrameInfo& frameInfo = m_que.back();
         frameInfo.m_inDetector = 1;
@@ -220,7 +220,7 @@ public:
         {
             m_cond.wait(lock);
             it = SearchUntracked();
-            PrintQue();
+            //PrintQue();
         }
         FrameInfo& frameInfo = *it;
 
@@ -240,7 +240,7 @@ public:
         while (m_que.empty() || m_que.front().m_inTracker == 0)
         {
             m_cond.wait(lock);
-            PrintQue();
+            //PrintQue();
         }
         FrameInfo frameInfo = m_que.front();
         m_que.pop_front();

@@ -201,7 +201,7 @@ void SlowDetector::DrawData(FrameInfo* frameInfo, int framesCounter, int currTim
             //                   cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
             //        )
             {
-				std::cout << track.m_type << " - " << track.m_rect << std::endl;
+				//std::cout << track.m_type << " - " << track.m_rect << std::endl;
 
                 DrawTrack(frameInfo->m_frame, 1, track, true);
             }
