@@ -1,10 +1,10 @@
-#include "SlowDetector.h"
+#include "AsyncDetector.h"
 
 ///
-/// \brief SlowDetector::SlowDetector
+/// \brief AsyncDetector::AsyncDetector
 /// \param parser
 ///
-SlowDetector::SlowDetector(const cv::CommandLineParser& parser)
+AsyncDetector::AsyncDetector(const cv::CommandLineParser& parser)
     :
       m_showLogs(true),
       m_fps(25),
@@ -31,17 +31,17 @@ SlowDetector::SlowDetector(const cv::CommandLineParser& parser)
 }
 
 ///
-/// \brief SlowDetector::~SlowDetector
+/// \brief AsyncDetector::~AsyncDetector
 ///
-SlowDetector::~SlowDetector()
+AsyncDetector::~AsyncDetector()
 {
 
 }
 
 ///
-/// \brief SlowDetector::Process
+/// \brief AsyncDetector::Process
 ///
-void SlowDetector::Process()
+void AsyncDetector::Process()
 {
     int k = 0;
 
@@ -117,14 +117,14 @@ void SlowDetector::Process()
 }
 
 ///
-/// \brief SlowDetector::DrawTrack
+/// \brief AsyncDetector::DrawTrack
 /// \param frame
 /// \param resizeCoeff
 /// \param track
 /// \param drawTrajectory
 /// \param isStatic
 ///
-void SlowDetector::DrawTrack(cv::Mat frame,
+void AsyncDetector::DrawTrack(cv::Mat frame,
                              int resizeCoeff,
                              const TrackingObject& track,
                              bool drawTrajectory
@@ -182,10 +182,10 @@ void SlowDetector::DrawTrack(cv::Mat frame,
 }
 
 ///
-/// \brief SlowDetector::DrawData
+/// \brief AsyncDetector::DrawData
 /// \param frameinfo
 ///
-void SlowDetector::DrawData(FrameInfo* frameInfo, int framesCounter, int currTime)
+void AsyncDetector::DrawData(FrameInfo* frameInfo, int framesCounter, int currTime)
 {
     if (m_showLogs)
     {
@@ -226,12 +226,12 @@ void SlowDetector::DrawData(FrameInfo* frameInfo, int framesCounter, int currTim
 }
 
 ///
-/// \brief SlowDetector::CaptureThread
+/// \brief AsyncDetector::CaptureThread
 /// \param fileName
 /// \param framesQue
 /// \param stopFlag
 ///
-void SlowDetector::CaptureThread(std::string fileName, int startFrame, float* fps, FramesQueue* framesQue, bool* stopFlag)
+void AsyncDetector::CaptureThread(std::string fileName, int startFrame, float* fps, FramesQueue* framesQue, bool* stopFlag)
 {
     cv::VideoCapture capture;
     if (fileName.size() == 1)
@@ -341,10 +341,10 @@ void SlowDetector::CaptureThread(std::string fileName, int startFrame, float* fp
 }
 
 ///
-/// \brief SlowDetector::DetectThread
+/// \brief AsyncDetector::DetectThread
 /// \param
 ///
-void SlowDetector::DetectThread(const config_t& config, cv::UMat firstGray, FramesQueue* framesQue, bool* stopFlag)
+void AsyncDetector::DetectThread(const config_t& config, cv::UMat firstGray, FramesQueue* framesQue, bool* stopFlag)
 {
     std::unique_ptr<BaseDetector> detector = std::unique_ptr<BaseDetector>(CreateDetector(tracking::Detectors::Yolo_Darknet, config, false, firstGray));
     detector->SetMinObjectSize(cv::Size(firstGray.cols / 50, firstGray.cols / 50));
@@ -365,10 +365,10 @@ void SlowDetector::DetectThread(const config_t& config, cv::UMat firstGray, Fram
 }
 
 ///
-/// \brief SlowDetector::TrackingThread
+/// \brief AsyncDetector::TrackingThread
 /// \param
 ///
-void SlowDetector::TrackingThread(const TrackerSettings& settings, FramesQueue* framesQue, bool* stopFlag)
+void AsyncDetector::TrackingThread(const TrackerSettings& settings, FramesQueue* framesQue, bool* stopFlag)
 {
     std::unique_ptr<CTracker> tracker = std::make_unique<CTracker>(settings);
 

@@ -35,13 +35,13 @@ struct FrameInfo
 // ----------------------------------------------------------------------
 
 ///
-/// \brief The SlowDetector class
+/// \brief The AsyncDetector class
 ///
-class SlowDetector
+class AsyncDetector
 {
 public:
-    SlowDetector(const cv::CommandLineParser& parser);
-    ~SlowDetector();
+    AsyncDetector(const cv::CommandLineParser& parser);
+    ~AsyncDetector();
 
     void Process();
 

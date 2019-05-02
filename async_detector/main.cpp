@@ -1,4 +1,4 @@
-#include "SlowDetector.h"
+#include "AsyncDetector.h"
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/ocl.hpp>
@@ -7,9 +7,9 @@
 
 static void Help()
 {
-    printf("\nExample of the SlowDetector\n"
+    printf("\nExample of the AsyncDetector\n"
            "Usage: \n"
-           "          ./SlowDetector <path to movie file> [--start_frame]=<start a video from this position> [--end_frame]=<play a video to this position> [--end_delay]=<delay in milliseconds after video ending> [--out]=<name of result video file> [--show_logs]=<show logs> \n\n"
+           "          ./AsyncDetector <path to movie file> [--start_frame]=<start a video from this position> [--end_frame]=<play a video to this position> [--end_delay]=<delay in milliseconds after video ending> [--out]=<name of result video file> [--show_logs]=<show logs> \n\n"
            "Press:\n"
            "\'m\' key for change mode: play|pause. When video is paused you can press any key for get next frame. \n\n"
            "Press Esc to exit from video \n\n"
@@ -39,7 +39,7 @@ int main(int argc, char** argv)
     cv::ocl::setUseOpenCL(useOCL);
     std::cout << (cv::ocl::useOpenCL() ? "OpenCL is enabled" : "OpenCL not used") << std::endl;
 
-    SlowDetector slow_detector(parser);
+    AsyncDetector slow_detector(parser);
     slow_detector.Process();
 
     cv::destroyAllWindows();

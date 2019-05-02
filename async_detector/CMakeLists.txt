@@ -1,14 +1,14 @@
 cmake_minimum_required (VERSION 3.5)
 
-project(SlowDetector)
+project(AsyncDetector)
 
 set(SOURCES
     main.cpp
-    SlowDetector.cpp
+    AsyncDetector.cpp
 )
 
 set(HEADERS
-    SlowDetector.h
+    AsyncDetector.h
     Queue.h
 )
 
