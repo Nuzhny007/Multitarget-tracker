@@ -164,12 +164,12 @@ void SlowDetector::DrawTrack(cv::Mat frame,
 #else
             cv::line(frame, ResizePoint(pt1.m_prediction), ResizePoint(pt2.m_prediction), cl, 1, CV_AA);
 #endif
-            if (!pt2.m_hasRaw)
+            if (pt2.m_hasRaw)
             {
 #if (CV_VERSION_MAJOR >= 4)
-                cv::circle(frame, ResizePoint(pt2.m_prediction), 4, cl, 1, cv::LINE_AA);
+                cv::circle(frame, ResizePoint(pt2.m_prediction), 4, cl, 2, cv::LINE_AA);
 #else
-                cv::circle(frame, ResizePoint(pt2.m_prediction), 4, cl, 1, CV_AA);
+                cv::circle(frame, ResizePoint(pt2.m_prediction), 4, cl, 2, CV_AA);
 #endif
             }
         }
@@ -196,10 +196,10 @@ void SlowDetector::DrawData(FrameInfo* frameInfo, int framesCounter, int currTim
         }
         else
         {
-            //if (track.IsRobust(1,          // Minimal trajectory size
-            //                   0.0005f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
-            //                   cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
-            //        )
+            if (track.IsRobust(5,          // Minimal trajectory size
+                               -1.f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
+                               cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
+                    )
             {
 				//std::cout << track.m_type << " - " << track.m_rect << std::endl;
 
@@ -235,8 +235,7 @@ void SlowDetector::CaptureThread(std::string fileName, int startFrame, float* fp
     capture.set(cv::CAP_PROP_POS_FRAMES, startFrame);
 
     *fps = std::max(1.f, (float)capture.get(cv::CAP_PROP_FPS));
-    //int frameWidth = cvRound(capture.get(cv::CAP_PROP_FRAME_WIDTH));
-    int frameHeight = cvRound(capture.get(cv::CAP_PROP_FRAME_HEIGHT));
+	int frameHeight = cvRound(capture.get(cv::CAP_PROP_FRAME_HEIGHT));
 
     // Detector
     config_t detectorConfig;
@@ -260,12 +259,12 @@ void SlowDetector::CaptureThread(std::string fileName, int startFrame, float* fp
     trackerSettings.m_useLocalTracking = false;
     trackerSettings.m_distType = tracking::DistCenters;
     trackerSettings.m_kalmanType = tracking::KalmanLinear;
-    trackerSettings.m_filterGoal = tracking::FilterRect;
-    trackerSettings.m_lostTrackType = tracking::TrackCSRT; // Use KCF tracker for collisions resolving
+    trackerSettings.m_filterGoal = tracking::FilterCenter;
+    trackerSettings.m_lostTrackType = tracking::TrackSTAPLE; // Use KCF tracker for collisions resolving
     trackerSettings.m_matchType = tracking::MatchHungrian;
     trackerSettings.m_dt = 0.5f;                             // Delta time for Kalman filter
     trackerSettings.m_accelNoiseMag = 0.5f;                  // Accel noise magnitude for Kalman filter
-    trackerSettings.m_distThres = frameHeight / 15.f;         // Distance threshold between region and object on two frames
+    trackerSettings.m_distThres = frameHeight / 10.f;         // Distance threshold between region and object on two frames
 
     trackerSettings.m_useAbandonedDetection = false;
     if (trackerSettings.m_useAbandonedDetection)
@@ -304,6 +303,10 @@ void SlowDetector::CaptureThread(std::string fileName, int startFrame, float* fp
             *stopFlag = true;
             break;
         }
+		if (frameInfo.m_clFrame.empty())
+		{
+			frameInfo.m_clFrame = frameInfo.m_frame.getUMat(cv::ACCESS_READ);
+		}
         cv::cvtColor(frameInfo.m_frame, frameInfo.m_gray, cv::COLOR_BGR2GRAY);
 
         framesQue->AddNewFrame(frameInfo);
@@ -334,10 +337,6 @@ void SlowDetector::DetectThread(const config_t& config, cv::UMat firstGray, Fram
     {
         FrameInfo& frameInfo = framesQue->GetLastUndetectedFrame();
 
-        if (frameInfo.m_clFrame.empty())
-        {
-            frameInfo.m_clFrame = frameInfo.m_frame.getUMat(cv::ACCESS_READ);
-        }
         detector->Detect(frameInfo.m_clFrame);
         //std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -366,10 +365,6 @@ void SlowDetector::TrackingThread(const TrackerSettings& settings, FramesQueue* 
         }
         else
         {
-            if (frameInfo.m_clFrame.empty())
-            {
-                frameInfo.m_clFrame = frameInfo.m_frame.getUMat(cv::ACCESS_READ);
-            }
             tracker->Update(frameInfo.m_regions, frameInfo.m_clFrame, frameInfo.m_fps);
         }
 
