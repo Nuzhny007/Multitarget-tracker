@@ -61,10 +61,13 @@ void SlowDetector::Process()
 
     int framesCounter = m_startFrame + 1;
 
+	FrameInfo frames[2];
+	size_t frameInd = 0;
     for (;;)
     {
         // Show frame after detecting and tracking
-        FrameInfo processedFrame = m_framesQue.GetFirstProcessedFrame();
+		frames[frameInd] = m_framesQue.GetFirstProcessedFrame();
+        FrameInfo& processedFrame = frames[frameInd];
 
         int64 t2 = cv::getTickCount();
 
@@ -97,6 +100,8 @@ void SlowDetector::Process()
             std::cout << "Process: riched last " << m_endFrame << " frame" << std::endl;
             break;
         }
+
+		frameInd = !frameInd;
     }
 
     std::cout << "Stopping threads..." << std::endl;
@@ -167,9 +172,9 @@ void SlowDetector::DrawTrack(cv::Mat frame,
             if (pt2.m_hasRaw)
             {
 #if (CV_VERSION_MAJOR >= 4)
-                cv::circle(frame, ResizePoint(pt2.m_prediction), 4, cl, 2, cv::LINE_AA);
+                cv::circle(frame, ResizePoint(pt2.m_prediction), 4, cl, 4, cv::LINE_AA);
 #else
-                cv::circle(frame, ResizePoint(pt2.m_prediction), 4, cl, 2, CV_AA);
+                cv::circle(frame, ResizePoint(pt2.m_prediction), 4, cl, 4, CV_AA);
 #endif
             }
         }
@@ -204,6 +209,17 @@ void SlowDetector::DrawData(FrameInfo* frameInfo, int framesCounter, int currTim
 				//std::cout << track.m_type << " - " << track.m_rect << std::endl;
 
                 DrawTrack(frameInfo->m_frame, 1, track, true);
+
+				std::string label = track.m_type + ": " + std::to_string(track.m_confidence);
+				int baseLine = 0;
+				cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+
+#if (CV_VERSION_MAJOR >= 4)
+				cv::rectangle(frameInfo->m_frame, cv::Rect(cv::Point(track.m_rect.x, track.m_rect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(255, 255, 255), cv::FILLED);
+#else
+				cv::rectangle(frameInfo->m_frame, cv::Rect(cv::Point(track.m_rect.x, track.m_rect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(255, 255, 255), CV_FILLED);
+#endif
+				cv::putText(frameInfo->m_frame, label, cv::Point(track.m_rect.x, track.m_rect.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
             }
         }
     }
@@ -259,7 +275,7 @@ void SlowDetector::CaptureThread(std::string fileName, int startFrame, float* fp
     trackerSettings.m_useLocalTracking = false;
     trackerSettings.m_distType = tracking::DistCenters;
     trackerSettings.m_kalmanType = tracking::KalmanLinear;
-    trackerSettings.m_filterGoal = tracking::FilterCenter;
+    trackerSettings.m_filterGoal = tracking::FilterRect;
     trackerSettings.m_lostTrackType = tracking::TrackSTAPLE; // Use KCF tracker for collisions resolving
     trackerSettings.m_matchType = tracking::MatchHungrian;
     trackerSettings.m_dt = 0.5f;                             // Delta time for Kalman filter
@@ -344,7 +360,7 @@ void SlowDetector::DetectThread(const config_t& config, cv::UMat firstGray, Fram
         frameInfo.m_regions.assign(regions.begin(), regions.end());
 
         frameInfo.m_inDetector = 2;
-        framesQue->Signal();
+        framesQue->Signal(frameInfo.m_dt);
     }
 }
 
@@ -369,7 +385,7 @@ void SlowDetector::TrackingThread(const TrackerSettings& settings, FramesQueue* 
         }
 
         frameInfo.m_tracks = tracker->GetTracks();
-        frameInfo.m_inTracker = 1;
-        framesQue->Signal();
+        frameInfo.m_inTracker = 2;
+        framesQue->Signal(frameInfo.m_dt);
     }
 }

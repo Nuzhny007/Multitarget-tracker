@@ -223,6 +223,7 @@ public:
             //PrintQue();
         }
         FrameInfo& frameInfo = *it;
+		frameInfo.m_inTracker = 1;
 
         //QUE_LOG << "GetFirstDetectedFrame end: " << frameInfo.m_dt << std::endl;
         return frameInfo;
@@ -237,7 +238,7 @@ public:
         //QUE_LOG << "GetFirstProcessedFrame start" << std::endl;
 
         std::unique_lock<std::mutex> lock(m_mutex);
-        while (m_que.empty() || m_que.front().m_inTracker == 0)
+        while (m_que.empty() || m_que.front().m_inTracker != 2)
         {
             m_cond.wait(lock);
             //PrintQue();
@@ -253,11 +254,11 @@ public:
     ///
     /// \brief Signal
     ///
-    void Signal()
+    void Signal(int64 ts)
     {
-        //QUE_LOG << "Signal start" << std::endl;
+        //QUE_LOG << "Signal start:" << ts << std::endl;
         m_cond.notify_all();
-        //QUE_LOG << "Signal end" << std::endl;
+        //QUE_LOG << "Signal end: " << ts << std::endl;
     }
 
 private:
