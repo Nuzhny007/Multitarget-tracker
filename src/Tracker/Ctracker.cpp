@@ -69,12 +69,16 @@ void CTracker::UpdateTrackingState(
 
     assignments_t assignment(N, -1); // Assignments regions -> tracks
 
+    std::vector<size_t> deletedTracks;
+    std::vector<std::pair<size_t, size_t>> newTracks;
+    std::vector<std::pair<size_t, track_t>> unassignedTracks;
+
+    track_t maxCost = 0;
     if (!m_tracks.empty())
     {
         // Distance matrix between all tracks to all regions
         distMatrix_t costMatrix(N * M);
         const track_t maxPossibleCost = static_cast<track_t>(currFrame.cols * currFrame.rows);
-        track_t maxCost = 0;
         CreateDistaceMatrix(regions, costMatrix, maxPossibleCost, maxCost, currFrame);
 
         // Solving assignment problem (shortest paths)
@@ -99,15 +103,19 @@ void CTracker::UpdateTrackingState(
         }
 
         // If track didn't get detects long time, remove it.
-        for (int i = 0; i < static_cast<int>(m_tracks.size()); i++)
+        size_t j = 0;
+        for (size_t i = 0; i < m_tracks.size(); ++i)
         {
             if (m_tracks[i]->SkippedFrames() > m_settings.m_maximumAllowedSkippedFrames ||
                     m_tracks[i]->IsStaticTimeout(cvRound(fps * (m_settings.m_maxStaticTime - m_settings.m_minStaticTime))))
             {
                 m_tracks.erase(m_tracks.begin() + i);
                 assignment.erase(assignment.begin() + i);
-                i--;
+                deletedTracks.push_back(j);
+                if (i)
+                    --i;
             }
+            ++j;
         }
     }
 
@@ -116,6 +124,8 @@ void CTracker::UpdateTrackingState(
     {
         if (find(assignment.begin(), assignment.end(), i) == assignment.end())
         {
+            newTracks.emplace_back(m_tracks.size(), i);
+
             m_tracks.push_back(std::make_unique<CTrack>(regions[i],
                                                       m_settings.m_kalmanType,
                                                       m_settings.m_dt,
@@ -144,8 +154,10 @@ void CTracker::UpdateTrackingState(
         else				     // if not continue using predictions
         {
             m_tracks[i]->Update(CRegion(), false, m_settings.m_maxTraceLength, m_prevFrame, currFrame, 0);
+            unassignedTracks.emplace_back(i, maxCost / 10);
         }
     }
+    m_SPCalculator->UpdateDetects(deletedTracks, newTracks, unassignedTracks);
 }
 
 ///

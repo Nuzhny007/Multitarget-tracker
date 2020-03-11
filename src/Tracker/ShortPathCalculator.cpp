@@ -160,7 +160,7 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
             m_detects.pop_front();
     }
 
-    auto layer = m_detects.begin() + m_detects.size() - 1;
+    auto layer = m_detects.rbegin();
     for (size_t i = 0; i < N; ++i)
     {
         Node& node = (*layer)[i];
@@ -257,25 +257,41 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
     {
         const auto& path = pathSet[i];
 
-        std::map<int, size_t> freq;
+        if (path.size() > 1)
+        {
+            std::map<int, size_t> freq;
 
-        for (size_t j = 0; j < path.size(); ++j)
-        {
-            int row = GetRowIndFromID(path[j]);
-            assert(row >= 0);
-            freq[row]++;
-        }
-        int maxRow = -1;
-        size_t maxvals = 0;
-        for (auto it : freq)
-        {
-            if (maxvals < it.second)
+            for (size_t j = 0; j < path.size(); ++j)
             {
-                maxvals = it.second;
-                maxRow = it.first;
+                int row = GetRowIndFromID(path[j]);
+                assert(row >= 0);
+                freq[row]++;
             }
+            int maxRow = -1;
+            size_t maxvals = 0;
+            for (auto it : freq)
+            {
+                if (maxvals < it.second)
+                {
+                    maxvals = it.second;
+                    maxRow = it.first;
+                }
+            }
+            assert(maxRow >= 0);
+            assignment[maxRow] = GetRegionIndFromID(path.size() - 1);
         }
-        assert(maxRow >= 0);
-        assignment[maxRow] = GetRegionIndFromID(path.size() - 1);
     }
+}
+
+///
+/// \brief SPmuSSP::UpdateDetects
+/// \param deletedTracks
+/// \param newTracks
+/// \param unassignedTracks
+///
+void SPmuSSP::UpdateDetects(const std::vector<size_t>& deletedTracks,
+                            const std::vector<std::pair<size_t, size_t>>& newTracks,
+                            const std::vector<std::pair<size_t, track_t>>& unassignedTracks)
+{
+
 }
