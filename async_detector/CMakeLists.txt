@@ -17,6 +17,7 @@ set(HEADERS
 # ----------------------------------------------------------------------------
 INCLUDE_DIRECTORIES(
                     ${PROJECT_SOURCE_DIR}/../src
+                    ${PROJECT_SOURCE_DIR}/../src/common
                     ${PROJECT_SOURCE_DIR}/../src/Detector
                     ${PROJECT_SOURCE_DIR}/../src/Detector/vibe_src
                     ${PROJECT_SOURCE_DIR}/../src/Detector/Subsense
@@ -27,6 +28,7 @@ INCLUDE_DIRECTORIES(
 set(LIBS
     ${OpenCV_LIBS}
     mtracking
+    mdetection
 )
                      
 if (BUILD_YOLO_LIB)
