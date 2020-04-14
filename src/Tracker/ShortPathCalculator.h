@@ -55,7 +55,6 @@ public:
                        const std::vector<std::pair<size_t, size_t>>& /*newTracks*/,
                        const std::vector<std::pair<size_t, track_t>>& /*unassignedTracks*/)
     {
-
     }
 
 private:
@@ -77,7 +76,9 @@ public:
 
     void UpdateDetects(const std::vector<size_t>& /*deletedTracks*/,
                        const std::vector<std::pair<size_t, size_t>>& /*newTracks*/,
-                       const std::vector<std::pair<size_t, track_t>>& /*unassignedTracks*/);
+                       const std::vector<std::pair<size_t, track_t>>& /*unassignedTracks*/)
+	{
+	}
 };
 
 ///
