@@ -177,35 +177,35 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
     }
 
     // Calc number of nodes and arcs
-    int nNodes = 0; // no of nodes
-    int nArcs = 0;  // no of arcs
-    for (const auto& layer : m_detects)
+    size_t nNodes = 0; // no of nodes
+	size_t nArcs = 0;  // no of arcs
+    for (const auto& llayer : m_detects)
     {
-        nNodes += layer.Size();
-        nArcs += layer.m_arcsCount;
+        nNodes += llayer.Size();
+        nArcs += llayer.m_arcsCount;
     }
 
     // Create Graph
-    Graph orgGraph(nNodes, nArcs, 0, nNodes - 1, 0, 0);
+    Graph orgGraph(static_cast<int>(nNodes), static_cast<int>(nArcs), 0, static_cast<int>(nNodes) - 1, 0, 0);
     int edgeID = 0;
-    int edgesSum = 0;
-    int nodesSum = 0;
-    for (const auto& layer : m_detects)
+    size_t edgesSum = 0;
+    size_t nodesSum = 0;
+    for (const auto& llayer : m_detects)
     {
-        for (size_t j = 0; j < layer.m_nodes.size(); ++j)
+        for (size_t j = 0; j < llayer.m_nodes.size(); ++j)
         {
-            const auto& node = layer.m_nodes[j];
+            const auto& node = llayer.m_nodes[j];
             for (size_t i = 0; i < node.m_arcs.size(); ++i)
             {
                 const auto& arc = node.m_arcs[i];
-                int tail = nodesSum + j;
-                int head = nodesSum + layer.m_nodes.size() + arc.first;
-                orgGraph.add_edge(tail, head, edgeID, arc.second);
+                size_t tail = nodesSum + j;
+				size_t head = nodesSum + llayer.m_nodes.size() + arc.first;
+                orgGraph.add_edge(static_cast<int>(tail), static_cast<int>(head), edgeID, arc.second);
                 ++edgeID;
             }
         }
-        edgesSum += layer.m_arcsCount;
-        nodesSum += layer.m_nodes.size();
+        edgesSum += llayer.m_arcsCount;
+        nodesSum += llayer.m_nodes.size();
     }
 
     // Find paths
@@ -229,7 +229,7 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
         {
             if (nodesSum + layer.m_nodes.size() > static_cast<size_t>(id))
             {
-                res = id - nodesSum;
+                res = id - static_cast<int>(nodesSum);
             }
             nodesSum += layer.m_nodes.size();
         }
@@ -245,7 +245,7 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
             if (nodesSum + layer.m_nodes.size() > static_cast<size_t>(id))
             {
                 if (i + 1 == m_detects.size())
-                    res = id - nodesSum;
+                    res = id - static_cast<int>(nodesSum);
                 break;
             }
             nodesSum += layer.m_nodes.size();
@@ -278,7 +278,7 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
                 }
             }
             assert(maxRow >= 0);
-            assignment[maxRow] = GetRegionIndFromID(path.size() - 1);
+            assignment[maxRow] = GetRegionIndFromID(static_cast<int>(path.size()) - 1);
         }
     }
 }
@@ -293,5 +293,8 @@ void SPmuSSP::UpdateDetects(const std::vector<size_t>& deletedTracks,
                             const std::vector<std::pair<size_t, size_t>>& newTracks,
                             const std::vector<std::pair<size_t, track_t>>& unassignedTracks)
 {
+	for (auto ind : deletedTracks)
+	{
 
+	}
 }
