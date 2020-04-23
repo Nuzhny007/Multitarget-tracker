@@ -146,7 +146,7 @@ enum MatchType
 {
     MatchHungrian,
     MatchBipart,
-    muSSP
+	MatchmuSSP
 };
 
 ///

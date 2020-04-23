@@ -5,16 +5,18 @@
 //    return node_id;
 //}
 
-void Node::add_precursor(int pre_id, int pre_edge_id, double weight) {
-    this->precursor_idx.push_back(pre_id);
-    this->precursor_edges_idx.push_back(pre_edge_id);
-    this->precursor_edges_weights.push_back(weight);
+void Node::add_precursor(int pre_id, int pre_edge_id, track_t weight)
+{
+    precursor_idx.push_back(pre_id);
+    precursor_edges_idx.push_back(pre_edge_id);
+    precursor_edges_weights.push_back(weight);
 }
 
-void Node::add_successor(int succ_id, int succ_edge_id, double weight) {
-    this->successor_idx.push_back(succ_id);
-    this->successor_edges_idx.push_back(succ_edge_id);
-    this->successor_edges_weights.push_back(weight);
+void Node::add_successor(int succ_id, int succ_edge_id, track_t weight)
+{
+    successor_idx.push_back(succ_id);
+    successor_edges_idx.push_back(succ_edge_id);
+    successor_edges_weights.push_back(weight);
 }
 
 //void Node::delete_precursor(int pre_id) {

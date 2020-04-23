@@ -1,8 +1,6 @@
 
 #include "Graph.h"
 /****shared macros****/
-#define MAX(x, y) ( ( (x) > (y) ) ?  x : y )
-#define MIN(x, y) ( ( (x) < (y) ) ? x : y )
 #define REDUCED_EDGE_WEIGHTS(i, j, e) {\
     edge_weights[e] += distance2src[i];\
     edge_weights[e] -= distance2src[j];\
@@ -10,7 +8,8 @@
 
 
 
-Graph::Graph(int num_nodes, int num_edges, int src_id, int sink_id, double en_weight, double ex_weight) {
+Graph::Graph(int num_nodes, int num_edges, int src_id, int sink_id, track_t en_weight, track_t ex_weight)
+{
 
     num_nodes_ = num_nodes;
     num_edges_ = num_edges;
@@ -44,35 +43,16 @@ Graph::Graph(int num_nodes, int num_edges, int src_id, int sink_id, double en_we
     // data save ancestor information
     ancestor_ssd.assign(num_nodes, FINF);
     ancestors_descendants.resize(num_nodes);
-
-    time_test.resize(100, 0);
 }
 
 Node &Graph::get_node(int node_id) {
     return V_[node_id];
 }
 
-void Graph::add_edge(int tail_id, int head_id, int edge_id, double weight) {
-
+void Graph::add_edge(int tail_id, int head_id, int edge_id, track_t weight)
+{
     V_[tail_id].add_successor(head_id, edge_id, weight);
     V_[head_id].add_precursor(tail_id, edge_id, weight);
-
-    if (false) {
-        /******
-         * for results validation only, no need to use in real application
-         * ********/
-        edge_weights.push_back(weight);
-        //// there will be no collisions for insertion, so complexity is O(1)
-        node_id2edge_id.insert({node_key(head_id, tail_id), edge_id});
-        node_id2edge_id.insert({node_key(tail_id, head_id), edge_id});
-
-        //// for results validation
-        edge_tail_head.emplace_back(std::make_pair(tail_id, head_id));
-        edge_org_weights.push_back(weight);
-
-        if (static_cast<int>(edge_weights.size()) - 1 != edge_id)
-            std::cout << "we got wrong edge number" << std::endl;
-    }
 }
 
 
@@ -82,28 +62,66 @@ void Graph::add_edge(int tail_id, int head_id, int edge_id, double weight) {
  * edge-weigth > in_weight + out_weigth
  *
  *  * *************/
-void Graph::invalid_edge_rm(){
-    double sink_cost, src_cost;
+void Graph::invalid_edge_rm()
+{
+	std::cout << "Graph::invalid_edge_rm: Num nodes = " << num_nodes_ << std::endl;
     int rm_cnt = 0;
-    for (int i = 2; i < num_nodes_-1; i+=2){
-        sink_cost = V_[i].successor_edges_weights[0];
-        for (size_t j = 1; j < V_[i].successor_idx.size(); j++)//(int i = 0; i < this->V_[v].successor_idx.size(); ++i)
+	for (int i = 2; i < num_nodes_ - 1; i += 2)
+	{
+		auto& node = V_[i];
+
+		if (node.successor_edges_weights.empty())
+		{
+			std::cout << "1 node[" << i << "].successor_edges_weights is empty!!!" << std::endl;
+			continue;
+		}
+		assert(!node.successor_edges_weights.empty());
+
+        auto sink_cost = node.successor_edges_weights[0];
+        for (size_t j = 1; j < node.successor_idx.size(); j++)
         {
-            if (V_[i].successor_edges_weights[j] > sink_cost + V_[V_[i].successor_idx[j]].precursor_edges_weights[0]){
-                V_[i].successor_edges_weights[j] = FINF;
+			auto ind = node.successor_idx[j];
+			if (V_.size() <= ind)
+				std::cout << "V_.size() <= node.successor_idx[j]: " << V_.size() << " <= " << ind << std::endl;
+			assert(V_.size() > ind);
+			if (V_[ind].precursor_edges_weights.empty())
+				std::cout << "V_[ind].precursor_edges_weights is empty!!!" << std::endl;
+			assert(!V_[ind].precursor_edges_weights.empty());
+
+            if (node.successor_edges_weights[j] > sink_cost + V_[ind].precursor_edges_weights[0])
+			{
+                node.successor_edges_weights[j] = FINF;
                 rm_cnt++;
             }
         }
     }
 
-    for (int i = 1; i < num_nodes_-1; i+=2){
-        src_cost = V_[i].precursor_edges_weights[0];
-        for (size_t j = 1; j < V_[i].precursor_idx.size(); j++)//(int i = 0; i < this->V_[v].successor_idx.size(); ++i)
+    for (int i = 1; i < num_nodes_-1; i+=2)
+	{
+		auto& node = V_[i];
+
+		if (node.precursor_edges_weights.empty())
+		{
+			std::cout << "2 node[" << i << "].precursor_edges_weights is empty!!!" << std::endl;
+			continue;
+		}
+
+        auto src_cost = node.precursor_edges_weights[0];
+        for (size_t j = 1; j < node.precursor_idx.size(); j++)
         {
-            if (V_[i].precursor_edges_weights[j] > src_cost + V_[V_[i].precursor_idx[j]].successor_edges_weights[0]){
-                V_[i].precursor_edges_weights[j] = FINF;
-                rm_cnt++;
-            }
+			auto ind = node.precursor_idx[j];
+			if (V_.size() <= ind)
+				std::cout << "V_.size() <= node.precursor_idx[j]: " << V_.size() << " <= " << ind << std::endl;
+			assert(V_.size() > ind);
+			if (V_[ind].successor_edges_weights.empty())
+				std::cout << "V_[ind].successor_edges_weights is empty!!!" << std::endl;
+			assert(!V_[ind].successor_edges_weights.empty());
+
+			if (node.precursor_edges_weights[j] > src_cost + V_[ind].successor_edges_weights[0])
+			{
+				node.precursor_edges_weights[j] = FINF;
+				rm_cnt++;
+			}
         }
     }
     std::cout << "# of dummy edges : " << rm_cnt << std::endl;
@@ -135,7 +153,8 @@ void Graph::topologicalSortUtil(int v, std::vector<bool>& visited, std::stack<in
  *
  * half_flag == true means: we only need to save former node (ancestor is also former nodes)
 *************************/
-void Graph::shortest_path_dag() {
+void Graph::shortest_path_dag()
+{
     std::stack<int> Stack;
     // Mark all the vertices as not visited
     std::vector<bool> visited(num_nodes_, false);
@@ -170,7 +189,7 @@ void Graph::shortest_path_dag() {
         // Update distances of all adjacent vertices
         for (size_t i = 0; i < V_[cur_node_id].successor_idx.size(); ++i) {
             int cur_succ_id = V_[cur_node_id].successor_idx[i];
-            double cur_distance = distance2src[cur_node_id] + V_[cur_node_id].successor_edges_weights[i];
+			auto cur_distance = distance2src[cur_node_id] + V_[cur_node_id].successor_edges_weights[i];
             if (distance2src[cur_succ_id] - cur_distance > 0.0000001)
             {
                 distance2src[cur_succ_id] = cur_distance;
@@ -266,15 +285,12 @@ void Graph::flip_path() { // erase the best one link to sink
     /** for 2 and end-1, specially handled ***/
         // node path(2)
         int node_tmp = shortest_path[shortest_path.size() - 2];// the path currently is from sink to src
-        std::vector<int>::iterator edge_id_it;
-        std::vector<double>::iterator edge_weight_it;
-        double tmp_edge_weight;
         auto it = find(V_[node_tmp].successor_idx.begin(), V_[node_tmp].successor_idx.end(),
                        shortest_path[shortest_path.size() - 3]);
         //// erase
         auto pos = it - V_[node_tmp].successor_idx.begin();
         //V_[node_tmp].successor_edges_idx.erase(V_[node_tmp].successor_edges_idx.begin() + pos);
-        tmp_edge_weight = *(V_[node_tmp].successor_edges_weights.begin() + pos);
+        auto tmp_edge_weight = *(V_[node_tmp].successor_edges_weights.begin() + pos);
         V_[node_tmp].successor_edges_weights.erase(V_[node_tmp].successor_edges_weights.begin() + pos);
         V_[node_tmp].successor_idx.erase(it);
 
@@ -283,9 +299,9 @@ void Graph::flip_path() { // erase the best one link to sink
         *it = shortest_path[shortest_path.size() - 3];
         parent_node_id[node_tmp] = *it;
         pos = it - V_[node_tmp].precursor_idx.begin();
-        //edge_id_it = V_[node_tmp].precursor_edges_idx.begin() + pos;
+        //auto edge_id_it = V_[node_tmp].precursor_edges_idx.begin() + pos;
         //*edge_id_it = node_id2edge_id[node_key(node_tmp, *it)];
-        edge_weight_it = V_[node_tmp].precursor_edges_weights.begin() + pos;
+        auto edge_weight_it = V_[node_tmp].precursor_edges_weights.begin() + pos;
         *edge_weight_it = -tmp_edge_weight;
 
         //// node path(end-1)
@@ -309,7 +325,7 @@ void Graph::flip_path() { // erase the best one link to sink
         *edge_weight_it = -tmp_edge_weight;
 
         // from 3 to end - 2, reverse their precursor
-        for (unsigned long i = shortest_path.size() - 3; i >= 2; i--) {
+        for (size_t i = shortest_path.size() - 3; i >= 2; i--) {
             node_tmp = shortest_path[i];
             it = find(V_[node_tmp].precursor_idx.begin(), V_[node_tmp].precursor_idx.end(), shortest_path[i + 1]);
             *it = shortest_path[i - 1];
@@ -356,13 +372,13 @@ void Graph::topologicalSort_counter_order(int v) {
 /*************
  * sub-routine of update_shortest_path_tree_recursive
  * ****************/
-void Graph::recursive_update_successors_distance(int curr_node_id, double curr_dist, int curr_ancestor,
+void Graph::recursive_update_successors_distance(int curr_node_id, track_t curr_dist, int curr_ancestor,
                                                  std::vector<int> &update_node_id4edges)
 {
     for (size_t j = 0; j < V_[curr_node_id].successor_idx.size(); j++) {
         int it = V_[curr_node_id].successor_idx[j];
         if (node_in_visited[it] > 0) {
-            double cur_edge_weight = V_[curr_node_id].successor_edges_weights[j] - V_[curr_node_id].price + V_[it].price;
+            auto cur_edge_weight = V_[curr_node_id].successor_edges_weights[j] - V_[curr_node_id].price + V_[it].price;
             if (abs(cur_edge_weight) < 0.000001) { //// in the shortest path tree, permanently labeled
                 node_in_visited[it] = 0;
                 parent_node_id[it] = curr_node_id;
@@ -417,23 +433,22 @@ void Graph::update_shortest_path_tree_recursive(std::vector<int> &update_node_id
          * topological ordering update_node_id
          * if distance < min_dist, insert to dijkstra_multi_map, otherwise do not insert
          * ************************/
-        double cur_max_distance = cur_path_max_cost - precursor_queue_top_val - sink_info->sink_weight_shift;
+        auto cur_max_distance = cur_path_max_cost - precursor_queue_top_val - sink_info->sink_weight_shift;
         std::stack<int> useless_nodes;
-        double re_cal_edge_w;
         //// start
         for (size_t i = 0; i < tplog_vec.size(); i++) {
             int cur_node = tplog_vec[i];
             if (cur_node % 2 == 0) {//// parent_node_id[cur_node] == -1end-1 elements in flipped path, no use
                 distance2src[cur_node] = FINF;
             } else {
-                double cur_best_distance = MIN(distance2src[parent_node_id[cur_node]], cur_max_distance);
+                auto cur_best_distance = MIN(distance2src[parent_node_id[cur_node]], cur_max_distance);
                 distance2src[cur_node] = cur_best_distance;
 
                 for (size_t j = 0; j < V_[cur_node].precursor_idx.size(); j++) {
                     int it = V_[cur_node].precursor_idx[j];
                     //// the right thing
                     if (node_in_visited[it] == 0) {
-                        re_cal_edge_w = V_[cur_node].precursor_edges_weights[j] - V_[it].price + V_[cur_node].price;
+                        auto re_cal_edge_w = V_[cur_node].precursor_edges_weights[j] - V_[it].price + V_[cur_node].price;
                         if (re_cal_edge_w < distance2src[cur_node]) {
                             distance2src[cur_node] = re_cal_edge_w;
                             parent_node_id[cur_node] = it;
@@ -454,13 +469,11 @@ void Graph::update_shortest_path_tree_recursive(std::vector<int> &update_node_id
         tplog_vec.clear();
 
         //// check if the pre-best-choice can still be top of the sink_precursors
-        std::multimap<double, int>::iterator multi_map_it;
-        int curr_node_id;
-        double curr_node_dist;
-        while (!node_upt_waitinglist.empty()) {
-            multi_map_it = node_upt_waitinglist.begin(); ////Current vertex. The shortest distance for this has been found
-            curr_node_id = (*multi_map_it).second;
-            curr_node_dist = (*multi_map_it).first;
+        while (!node_upt_waitinglist.empty())
+		{
+            auto multi_map_it = node_upt_waitinglist.begin(); ////Current vertex. The shortest distance for this has been found
+            auto curr_node_id = (*multi_map_it).second;
+            auto curr_node_dist = (*multi_map_it).first;
 
             node_upt_waitinglist.erase(multi_map_it); //// remove the top one
 
@@ -475,8 +488,7 @@ void Graph::update_shortest_path_tree_recursive(std::vector<int> &update_node_id
             node_in_visited[curr_node_id] = false;
 
             update_node_id4edges.push_back(curr_node_id);
-            recursive_update_successors_distance(curr_node_id, curr_node_dist, ancestor_node_id[curr_node_id],
-                                                 update_node_id4edges);
+            recursive_update_successors_distance(curr_node_id, curr_node_dist, ancestor_node_id[curr_node_id], update_node_id4edges);
         }
 
         //// update ancestors_descendants
@@ -506,12 +518,10 @@ void Graph::update_shortest_path_tree_recursive(std::vector<int> &update_node_id
  * *****/
 void Graph::update_sink_info(std::vector<int> update_node_id)
 {
-    std::multimap<double, int>::iterator it;
-    double cur_dist;
     for (auto &&i : update_node_id) {////Set updated node as not visited
         if (i % 2 == 0) { //// 2, 4, 6 ... is the sink's precursors
             if (distance2src[i] < FINFHALF) {
-                cur_dist = sink_info->sink_precursor_weights[i] + distance2src[i];
+                auto cur_dist = sink_info->sink_precursor_weights[i] + distance2src[i];
                 sink_info->sink_precursor_weights[i] = cur_dist;
                 if (cur_dist < ancestor_ssd[ancestor_node_id[i]]) {
                     sink_info->sink_precursors.insert(std::make_pair(cur_dist, i));
@@ -531,7 +541,7 @@ void Graph::update_sink_info(std::vector<int> update_node_id)
         curr_best_choice = sink_info->sink_precursors.begin();
     }
 
-    double min4t_dist = curr_best_choice->first + sink_info->sink_weight_shift;
+    auto min4t_dist = curr_best_choice->first + sink_info->sink_weight_shift;
     int min4t_node_id = curr_best_choice->second;
 
     parent_node_id[sink_id_] = min4t_node_id;

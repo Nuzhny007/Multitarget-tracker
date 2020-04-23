@@ -27,9 +27,7 @@ public:
 
     virtual void Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignments_t& assignment, track_t maxCost) = 0;
 
-    virtual void UpdateDetects(const std::vector<size_t>& deletedTracks,
-                               const std::vector<std::pair<size_t, size_t>>& newTracks,
-                               const std::vector<std::pair<size_t, track_t>>& unassignedTracks) = 0;
+    virtual void UpdateDetects(const std::vector<size_t>& deletedTracks, size_t newTracks, const std::vector<size_t>& reg2track) = 0;
 
 protected:
     SPSettings m_settings;
@@ -51,9 +49,7 @@ public:
         m_solver.Solve(costMatrix, N, M, assignment, AssignmentProblemSolver::optimal);
     }
 
-    void UpdateDetects(const std::vector<size_t>& /*deletedTracks*/,
-                       const std::vector<std::pair<size_t, size_t>>& /*newTracks*/,
-                       const std::vector<std::pair<size_t, track_t>>& /*unassignedTracks*/)
+    void UpdateDetects(const std::vector<size_t>& /*deletedTracks*/, size_t /*newTracks*/, const std::vector<size_t>& /*reg2track*/)
     {
     }
 
@@ -74,9 +70,7 @@ public:
 
     void Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignments_t& assignment, track_t maxCost);
 
-    void UpdateDetects(const std::vector<size_t>& /*deletedTracks*/,
-                       const std::vector<std::pair<size_t, size_t>>& /*newTracks*/,
-                       const std::vector<std::pair<size_t, track_t>>& /*unassignedTracks*/)
+    void UpdateDetects(const std::vector<size_t>& /*deletedTracks*/, size_t /*newTracks*/, const std::vector<size_t>& /*reg2track*/)
 	{
 	}
 };
@@ -94,9 +88,7 @@ public:
 
     void Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignments_t& assignment, track_t maxCost);
 
-    void UpdateDetects(const std::vector<size_t>& deletedTracks,
-                       const std::vector<std::pair<size_t, size_t>>& newTracks,
-                       const std::vector<std::pair<size_t, track_t>>& unassignedTracks);
+    void UpdateDetects(const std::vector<size_t>& deletedTracks, size_t newTracks, const std::vector<size_t>& reg2track);
 
 private:
 
@@ -150,6 +142,4 @@ private:
     };
 
     std::deque<Layer> m_detects;
-
-    //void AddNewNode();
 };

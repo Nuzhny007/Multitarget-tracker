@@ -39,7 +39,7 @@ bool YoloTensorRTDetector::Init(const config_t& config)
 		localConfig.file_model_cfg = modelConfiguration->second;
 		localConfig.file_model_weights = modelBinary->second;
 		localConfig.calibration_image_list_file_txt = "";
-		localConfig.inference_precison = tensor_rt::FP32;
+		localConfig.inference_precison = tensor_rt::FP16;
 		m_detector->init(localConfig);
     }
 

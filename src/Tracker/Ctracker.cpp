@@ -20,7 +20,7 @@ CTracker::CTracker(const TrackerSettings& settings)
     case tracking::MatchBipart:
         spcalc = new SPBipart(spSettings);
         break;
-    case tracking::muSSP:
+    case tracking::MatchmuSSP:
         spcalc = new SPmuSSP(spSettings);
         break;
     }
@@ -70,14 +70,15 @@ void CTracker::UpdateTrackingState(
     assignments_t assignment(N, -1); // Assignments regions -> tracks
 
     std::vector<size_t> deletedTracks;
-    std::vector<std::pair<size_t, size_t>> newTracks;
-    std::vector<std::pair<size_t, track_t>> unassignedTracks;
+    size_t newTracks = 0;
+	std::vector<size_t> reg2track(M);
 
     track_t maxCost = 0;
-    if (!m_tracks.empty())
+	distMatrix_t costMatrix;
+	if (!m_tracks.empty())
     {
         // Distance matrix between all tracks to all regions
-        distMatrix_t costMatrix(N * M);
+        costMatrix.resize(N * M);
         const track_t maxPossibleCost = static_cast<track_t>(currFrame.cols * currFrame.rows);
         CreateDistaceMatrix(regions, costMatrix, maxPossibleCost, maxCost, currFrame);
 
@@ -124,9 +125,11 @@ void CTracker::UpdateTrackingState(
     // Search for unassigned detects and start new tracks for them.
     for (size_t i = 0; i < regions.size(); ++i)
     {
-        if (find(assignment.begin(), assignment.end(), i) == assignment.end())
+		auto assign = find(assignment.begin(), assignment.end(), i);
+        if (assign == assignment.end())
         {
-            newTracks.emplace_back(m_tracks.size(), i);
+            ++newTracks;
+			reg2track[i] = m_tracks.size();
 
             m_tracks.push_back(std::make_unique<CTrack>(regions[i],
                                                       m_settings.m_kalmanType,
@@ -136,6 +139,10 @@ void CTracker::UpdateTrackingState(
                                                       m_settings.m_filterGoal == tracking::FilterRect,
                                                       m_settings.m_lostTrackType));
         }
+		else
+		{
+			reg2track[i] = *assign;
+		}
     }
 
     // Update Kalman Filters state
@@ -147,8 +154,7 @@ void CTracker::UpdateTrackingState(
         if (assignment[i] != -1) // If we have assigned detect, then update using its coordinates,
         {
             m_tracks[i]->SkippedFrames() = 0;
-            m_tracks[i]->Update(
-                        regions[assignment[i]], true,
+            m_tracks[i]->Update(regions[assignment[i]], true,
                     m_settings.m_maxTraceLength,
                     m_prevFrame, currFrame,
                     m_settings.m_useAbandonedDetection ? cvRound(m_settings.m_minStaticTime * fps) : 0);
@@ -156,10 +162,9 @@ void CTracker::UpdateTrackingState(
         else				     // if not continue using predictions
         {
             m_tracks[i]->Update(CRegion(), false, m_settings.m_maxTraceLength, m_prevFrame, currFrame, 0);
-            unassignedTracks.emplace_back(i, maxCost / 10);
         }
     }
-    m_SPCalculator->UpdateDetects(deletedTracks, newTracks, unassignedTracks);
+    m_SPCalculator->UpdateDetects(deletedTracks, newTracks, reg2track);
 }
 
 ///

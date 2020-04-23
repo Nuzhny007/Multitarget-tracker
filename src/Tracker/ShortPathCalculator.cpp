@@ -71,50 +71,57 @@ void SPBipart::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignm
 ///
 void FindSP(Graph& orgGraph, std::vector<track_t>& pathCost, std::vector<std::vector<int>>& pathSet)
 {
-    // 1: remove dummy edges
+	std::cout << "1: remove dummy edges" << std::endl;
     orgGraph.invalid_edge_rm();
 
     int path_num = 0;
 
-    // 2: initialize shortest path tree from the DAG
+	std::cout << "2: initialize shortest path tree from the DAG" << std::endl;
     orgGraph.shortest_path_dag();
 
-    pathCost.push_back(orgGraph.distance2src[orgGraph.sink_id_]);
-    orgGraph.cur_path_max_cost = -orgGraph.distance2src[orgGraph.sink_id_]; // the largest cost we can accept
+	if (orgGraph.distance2src.size() <= orgGraph.sink_id_)
+	{
+		std::cout << "Error: orgGraph.distance2src.size() <= orgGraph.sink_id_" << std::endl;
+	}
+	else
+	{
+		pathCost.push_back(orgGraph.distance2src[orgGraph.sink_id_]);
+		orgGraph.cur_path_max_cost = -orgGraph.distance2src[orgGraph.sink_id_]; // the largest cost we can accept
+	}
 
-    // 3: convert edge cost (make all weights positive)
+	std::cout << "3: convert edge cost (make all weights positive)" << std::endl;
     orgGraph.update_allgraph_weights();
 
-    // 8: extract shortest path
+	std::cout << "8: extract shortest path" << std::endl;
     orgGraph.extract_shortest_path();
 
     pathSet.push_back(orgGraph.shortest_path);
     path_num++;
 
-    std::vector<unsigned long> update_node_num;
+    std::vector<size_t> update_node_num;
 
-    // 4: find nodes for updating based on branch node
+	std::cout << "4: find nodes for updating based on branch node" << std::endl;
     std::vector<int> node_id4updating;
     orgGraph.find_node_set4update(node_id4updating);
 
-    // 10: rebuild residual graph by flipping paths
-    orgGraph.flip_path();//also erase the top sinker
+	std::cout << "10: rebuild residual graph by flipping paths" << std::endl;
+    orgGraph.flip_path(); // also erase the top sinker
     for (;;)
     {
-        // 6: update shortest path tree based on the selected sub-graph
+		std::cout << "6: update shortest path tree based on the selected sub-graph" << std::endl;
         orgGraph.update_shortest_path_tree_recursive(node_id4updating);
-        //printf("Iteration #%d, updated node number  %ld \n", path_num, graph.upt_node_num);
+		std::cout << "Iteration " << path_num << ", updated node number " << orgGraph.upt_node_num << std::endl;
 
-        // 7: update sink node (heap)
+		std::cout << "7: update sink node (heap)" << std::endl;
         orgGraph.update_sink_info(node_id4updating);
         update_node_num.push_back(node_id4updating.size());
 
-        // 8: extract shortest path
+		std::cout << "8: extract shortest path" << std::endl;
         orgGraph.extract_shortest_path();
 
-        // test if stop
-        double cur_path_cost = pathCost[path_num - 1] + orgGraph.distance2src[orgGraph.sink_id_];
-        if (cur_path_cost > -0.0000001)
+		std::cout << "test if stop" << std::endl;
+		track_t cur_path_cost = pathCost[path_num - 1] + orgGraph.distance2src[orgGraph.sink_id_];
+        if (cur_path_cost > -0.0000001f)
             break;
 
         pathCost.push_back(cur_path_cost);
@@ -122,13 +129,13 @@ void FindSP(Graph& orgGraph, std::vector<track_t>& pathCost, std::vector<std::ve
         pathSet.push_back(orgGraph.shortest_path);
         path_num++;
 
-        // 9: update weights
+		std::cout << "9: update weights" << std::endl;
         orgGraph.update_subgraph_weights(node_id4updating);
 
-        // 4: find nodes for updating
+		std::cout << "4: find nodes for updating" << std::endl;
         orgGraph.find_node_set4update(node_id4updating);
 
-        // 10: rebuild the graph
+		std::cout << "10: rebuild the graph" << std::endl;
         orgGraph.flip_path();
     }
 }
@@ -143,6 +150,13 @@ void FindSP(Graph& orgGraph, std::vector<track_t>& pathCost, std::vector<std::ve
 ///
 void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignments_t& assignment, track_t /*maxCost*/)
 {
+	std::cout << "SPmuSSP::Solve: tracks = " << N << ", M = " << M << std::endl;
+	std::cout << "m_detects init: size = " << m_detects.size() << ", config:" << std::endl;
+	for (size_t i = 0; i < m_detects.size(); ++i)
+	{
+		std::cout << "layer[" << i << "]: nodes = " << m_detects[i].Size() << ", arcs = " << m_detects[i].m_arcsCount << std::endl;
+	}
+
     // Add new "layer" to the graph
     if (m_detects.size() < 2)
     {
@@ -160,7 +174,7 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
             m_detects.pop_front();
     }
 
-    auto layer = m_detects.rbegin();
+    auto layer = m_detects.rbegin() + 1;
     for (size_t i = 0; i < N; ++i)
     {
         Node& node = (*layer)[i];
@@ -176,6 +190,12 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
         }
     }
 
+	std::cout << "m_detects updated: size = " << m_detects.size() << ", config:" << std::endl;
+	for (size_t i = 0; i < m_detects.size(); ++i)
+	{
+		std::cout << "layer[" << i << "]: nodes = " << m_detects[i].Size() << ", arcs = " << m_detects[i].m_arcsCount << std::endl;
+	}
+
     // Calc number of nodes and arcs
     size_t nNodes = 0; // no of nodes
 	size_t nArcs = 0;  // no of arcs
@@ -185,7 +205,7 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
         nArcs += llayer.m_arcsCount;
     }
 
-    // Create Graph
+	std::cout << "Create Graph: nodes " << nNodes << ", arcs " << nArcs << std::endl;
     Graph orgGraph(static_cast<int>(nNodes), static_cast<int>(nArcs), 0, static_cast<int>(nNodes) - 1, 0, 0);
     int edgeID = 0;
     size_t edgesSum = 0;
@@ -208,16 +228,16 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
         nodesSum += llayer.m_nodes.size();
     }
 
-    // Find paths
-    std::vector<track_t> pathCost;
+	std::cout << "Find paths" << std::endl;
+	std::vector<track_t> pathCost;
     std::vector<std::vector<int>> pathSet;
     FindSP(orgGraph, pathCost, pathSet);
 
-    track_t costSum = 0;
-    for (auto &&i : pathCost)
-    {
-        costSum += i;
-    }
+    // track_t costSum = 0;
+    // for (auto &&i : pathCost)
+    // {
+    //    costSum += i;
+    // }
     // printf("The number of paths: %ld, total cost is %.7f, final path cost is: %.7f.\n", path_cost.size(), cost_sum, path_cost[path_cost.size() - 1]);
     // print_solution(org_graph.get(), path_set, "output.txt");//"output_edge_rm.txt"
 
@@ -253,6 +273,7 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
         return res;
     };
 
+	std::cout << "Get result" << std::endl;
     for (size_t i = 0; i < pathSet.size(); ++i)
     {
         const auto& path = pathSet[i];
@@ -287,14 +308,69 @@ void SPmuSSP::Solve(const distMatrix_t& costMatrix, size_t N, size_t M, assignme
 /// \brief SPmuSSP::UpdateDetects
 /// \param deletedTracks
 /// \param newTracks
-/// \param unassignedTracks
+/// \param reg2tracks
 ///
-void SPmuSSP::UpdateDetects(const std::vector<size_t>& deletedTracks,
-                            const std::vector<std::pair<size_t, size_t>>& newTracks,
-                            const std::vector<std::pair<size_t, track_t>>& unassignedTracks)
+void SPmuSSP::UpdateDetects(const std::vector<size_t>& deletedTracks, size_t newTracks, const std::vector<size_t>& reg2track)
 {
-	for (auto ind : deletedTracks)
+	std::cout << "SPmuSSP::UpdateDetects: deletedTracks = " << deletedTracks.size() << ", newTracks = " << newTracks << ", reg2track = " << reg2track.size() << std::endl;
+	std::cout << "m_detects before: size = " << m_detects.size() << ", config:" << std::endl;
+	for (size_t i = 0; i < m_detects.size(); ++i)
 	{
+		std::cout << "layer[" << i << "]: nodes = " << m_detects[i].Size() << ", arcs = " << m_detects[i].m_arcsCount << std::endl;
+	}
 
+	if (m_detects.empty())
+		return;
+
+	m_detects.pop_back();
+	auto currLayer = m_detects.rbegin();
+
+	if (m_detects.size() > 1)
+	{
+		auto prevLayer = m_detects.rbegin() + 1;
+		for (auto ind : deletedTracks)
+		{
+			// Delete all arcs to this node from the previous layer
+			for (size_t i = 0; i < prevLayer->m_nodes.size(); ++i)
+			{
+				Node& node = (*prevLayer)[i];
+
+				for (auto it = std::begin(node.m_arcs); it != std::end(node.m_arcs);)
+				{
+					if (it->first == ind)
+					{
+						it = node.m_arcs.erase(it);
+						prevLayer->m_arcsCount--;
+					}
+					else
+					{
+						++it;
+					}
+				}
+			}
+			// Delete node
+			currLayer->m_nodes.erase(std::begin(currLayer->m_nodes) + ind);
+		}
+	}
+
+	size_t newSize = currLayer->Size() + newTracks;
+	m_detects.push_back(Layer());
+	m_detects.back().Resize(newSize);
+
+	auto layer = m_detects.rbegin() + 1;
+	for (size_t i = 0; i < layer->Size(); ++i)
+	{
+		Node& node = (*layer)[i];
+
+		for (auto& arc : node.m_arcs)
+		{
+			arc.first = reg2track[arc.first];
+		}
+	}
+
+	std::cout << "m_detects after: size = " << m_detects.size() << ", config:" << std::endl;
+	for (size_t i = 0; i < m_detects.size(); ++i)
+	{
+		std::cout << "layer[" << i << "]: nodes = " << m_detects[i].Size() << ", arcs = " << m_detects[i].m_arcsCount << std::endl;
 	}
 }

@@ -647,8 +647,8 @@ protected:
         settings.SetDistance(tracking::DistCenters);
 		settings.m_kalmanType = tracking::KalmanLinear;
         settings.m_filterGoal = tracking::FilterCenter;
-        settings.m_lostTrackType = tracking::TrackKCF;      // Use visual objects tracker for collisions resolving
-		settings.m_matchType = tracking::MatchHungrian;
+        settings.m_lostTrackType = tracking::TrackNone;      // Use visual objects tracker for collisions resolving
+		settings.m_matchType = tracking::MatchmuSSP;
 		settings.m_dt = 0.3f;                                // Delta time for Kalman filter
 		settings.m_accelNoiseMag = 0.2f;                     // Accel noise magnitude for Kalman filter
         settings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
