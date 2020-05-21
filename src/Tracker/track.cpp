@@ -24,7 +24,9 @@ CTrack::CTrack(
 	    bool useAcceleration,
         size_t trackID,
         bool filterObjectSize,
-        tracking::LostTrackType externalTrackerForLost
+        tracking::LostTrackType externalTrackerForLost,
+	    bool useGeoCoords,
+	    const GeoParams<geocoord_t>& geoParams
         )
     :
       m_trackID(trackID),
@@ -35,12 +37,20 @@ CTrack::CTrack(
       m_kalman(kalmanType, useAcceleration, deltaTime, accelNoiseMag),
       m_filterObjectSize(filterObjectSize),
       m_outOfTheFrame(false),
-      m_externalTrackerForLost(externalTrackerForLost)
+      m_externalTrackerForLost(externalTrackerForLost),
+	  m_useGeoCoords(useGeoCoords),
+	  m_geoParams(geoParams),
+	  m_predictionGeoPoint(region.m_geoCoord)
 {
     if (filterObjectSize)
         m_kalman.Update(region.m_brect, true);
-    else
-        m_kalman.Update(m_predictionPoint, true);
+	else
+	{
+		if (m_useGeoCoords)
+			m_kalman.Update(m_predictionGeoPoint, true);
+		else
+			m_kalman.Update(m_predictionPoint, true);
+	}
 
     m_trace.push_back(m_predictionPoint, m_predictionPoint);
 }
@@ -133,6 +143,16 @@ track_t CTrack::CalcDistHist(const CRegion& reg, cv::UMat currFrame) const
 }
 
 ///
+/// \brief CTrack::CalcDistGeo
+/// \param reg
+/// \return
+///
+track_t CTrack::CalcDistGeo(const CRegion& reg) const
+{
+	return DistanceInMeters(m_predictionGeoPoint, reg.m_geoCoord);
+}
+
+///
 /// \brief CTrack::Update
 /// \*param region
 /// \param dataCorrect
@@ -156,7 +176,10 @@ void CTrack::Update(
     }
     else // Kalman filter only for object center
     {
-        PointUpdate(region.m_rrect.center, region.m_rrect.size, dataCorrect, currFrame.size());
+		if (m_useGeoCoords)
+			PointUpdate(region.m_geoCoord, region.m_rrect.size, dataCorrect, currFrame.size());
+		else
+			PointUpdate(region.m_rrect.center, region.m_rrect.size, dataCorrect, currFrame.size());
     }
 
     if (dataCorrect)
@@ -874,12 +897,20 @@ void CTrack::PointUpdate(
 {
     m_kalman.GetPointPrediction();
 
-    m_predictionPoint = m_kalman.Update(pt, dataCorrect);
+	if (m_useGeoCoords)
+	{
+		m_predictionGeoPoint = m_kalman.Update(pt, dataCorrect);
+		m_predictionPoint = m_geoParams.Geo2Pix(m_predictionGeoPoint);
+	}
+	else
+	{
+		m_predictionPoint = m_kalman.Update(pt, dataCorrect);
+	}
 
     if (dataCorrect)
     {
-        const int a1 = 1;
-        const int a2 = 9;
+        constexpr int a1 = 1;
+        constexpr int a2 = 9;
         m_predictionRect.size.width = (a1 * newObjSize.width + a2 * m_predictionRect.size.width) / (a1 + a2);
         m_predictionRect.size.height = (a1 * newObjSize.height + a2 * m_predictionRect.size.height) / (a1 + a2);
     }

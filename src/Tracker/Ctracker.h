@@ -12,8 +12,6 @@
 #include "track.h"
 #include "ShortPathCalculator.h"
 
-// ----------------------------------------------------------------------
-
 ///
 /// \brief The TrackerSettings struct
 ///
@@ -96,6 +94,18 @@ struct TrackerSettings
 	/// Object types that can be matched while tracking
 	///
 	std::map<std::string, std::set<std::string>> m_nearTypes;
+
+	///
+	/// \brief m_useGeoCoords
+	/// If true then wiil bue used geographical coordinates for Kalman filter and tracking
+	///
+	bool m_useGeoCoords = false;
+
+	///
+	/// \brief m_geoParams
+	/// Parameters for converting frame coordinates to geographical coordinates
+	///
+	GeoParams<geocoord_t> m_geoParams;
 
 	///
 	TrackerSettings()

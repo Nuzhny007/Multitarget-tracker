@@ -227,6 +227,7 @@ struct TrackingObject
 class CTrack
 {
 public:
+	CTrack() = delete;
     CTrack(const CRegion& region,
             tracking::KalmanType kalmanType,
             track_t deltaTime,
@@ -234,17 +235,19 @@ public:
 		    bool useAcceleration,
             size_t trackID,
             bool filterObjectSize,
-            tracking::LostTrackType externalTrackerForLost);
+            tracking::LostTrackType externalTrackerForLost,
+		    bool useGeoCoords,
+		    const GeoParams<geocoord_t>& geoParams);
 
     ///
-    /// \brief CalcDist
+    /// \brief CalcDistCenter
     /// Euclidean distance in pixels between objects centres on two N and N+1 frames
     /// \param reg
     /// \return
     ///
     track_t CalcDistCenter(const CRegion& reg) const;
     ///
-    /// \brief CalcDist
+    /// \brief CalcDistRect
     /// Euclidean distance in pixels between object contours on two N and N+1 frames
     /// \param reg
     /// \return
@@ -258,13 +261,21 @@ public:
     ///
     track_t CalcDistJaccard(const CRegion& reg) const;
 	///
-	/// \brief CalcDistJaccard
+	/// \brief CalcDistHist
 	/// Distance from 0 to 1 between objects histogramms on two N and N+1 frames
 	/// \param reg
 	/// \param currFrame
 	/// \return
 	///
 	track_t CalcDistHist(const CRegion& reg, cv::UMat currFrame) const;
+	///
+	/// \brief CalcDistGeo
+	/// Euclidean distance in meters between objects centres in geographical coordinates
+	/// \param reg
+	/// \return
+	///
+	track_t CalcDistGeo(const CRegion& reg) const;
+
 
 	cv::RotatedRect CalcPredictionEllipse(cv::Size_<track_t> minRadius) const;
 	///
@@ -305,6 +316,10 @@ private:
     TKalmanFilter m_kalman;
     bool m_filterObjectSize = false;
     bool m_outOfTheFrame = false;
+
+	bool m_useGeoCoords = false;
+	const GeoParams<geocoord_t>& m_geoParams;
+	GeoPoint_t m_predictionGeoPoint;
 
     tracking::LostTrackType m_externalTrackerForLost;
 #ifdef USE_OCV_KCF

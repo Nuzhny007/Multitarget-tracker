@@ -11,6 +11,33 @@
 #endif
 
 ///
+constexpr double DEG_TO_RAD = 0.017453292519943295769236907684886;
+constexpr double EARTH_RADIUS_IN_METERS = 6372797.560856;
+
+template<typename T>
+T Haversine(const cv::Point_<T>& from, const cv::Point_<T>& to)
+{
+	constexpr T Deg2Rad = static_cast<T>(DEG_TO_RAD);
+
+	T lat_arc = (from.x - to.x) * Deg2Rad;
+	T lon_arc = (from.y - to.y) * Deg2Rad;
+	T lat_h = sin(lat_arc * static_cast<T>(0.5));
+	lat_h *= lat_h;
+	T lon_h = sin(lon_arc * static_cast<T>(0.5));
+	lon_h *= lon_h;
+	T tmp = cos(from.x * Deg2Rad) * cos(to.y * Deg2Rad);
+	return static_cast<T>(2.0) * asin(sqrt(lat_h + tmp * lon_h));
+}
+
+///
+template<typename T>
+T DistanceInMeters(const cv::Point_<T>& from, const cv::Point_<T>& to)
+{
+	constexpr T EarthRadius = static_cast<T>(EARTH_RADIUS_IN_METERS);
+	return EarthRadius * Haversine(from, to);
+}
+
+///
 /// \brief The TKalmanFilter class
 /// http://www.morethantechnical.com/2011/06/17/simple-kalman-filter-for-tracking-using-opencv-2-2-w-code/
 ///
@@ -70,7 +97,6 @@ private:
 #endif
 };
 
-//---------------------------------------------------------------------------
 ///
 /// \brief sqr
 /// \param val

@@ -124,7 +124,9 @@ void CTracker::UpdateTrackingState(
                                                       m_settings.m_useAcceleration,
                                                       m_nextTrackID++,
                                                       m_settings.m_filterGoal == tracking::FilterRect,
-                                                      m_settings.m_lostTrackType));
+                                                      m_settings.m_lostTrackType,
+				                      m_settings.m_useGeoCoords,
+				                      m_settings.m_geoParams));
         }
     }
 
@@ -226,15 +228,18 @@ void CTracker::CreateDistaceMatrix(const regions_t& regions, distMatrix_t& costM
 				++ind;
 
 				if (m_settings.m_distType[ind] > 0.0f && ind == tracking::DistJaccard)
-				{
 					dist += m_settings.m_distType[ind] * track->CalcDistJaccard(reg);
-				}
+
 				++ind;
 
 				if (m_settings.m_distType[ind] > 0.0f && ind == tracking::DistHist)
-				{
 					dist += m_settings.m_distType[ind] * track->CalcDistHist(reg, currFrame);
-				}
+
+				++ind;
+
+				if (m_settings.m_distType[ind] > 0.0f && ind == tracking::DistGeo)
+					dist += m_settings.m_distType[ind] * track->CalcDistGeo(reg);
+
 				++ind;
 				assert(ind == tracking::DistsCount);
 			}
