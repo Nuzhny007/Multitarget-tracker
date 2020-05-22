@@ -110,10 +110,11 @@ struct TrackerSettings
 	///
 	TrackerSettings()
 	{
-		m_distType[tracking::DistCenters] = 0.0f;
+		m_distType[tracking::DistCenters] = 1.0f;
 		m_distType[tracking::DistRects] = 0.0f;
-		m_distType[tracking::DistJaccard] = 0.5f;
-		m_distType[tracking::DistHist] = 0.5f;
+		m_distType[tracking::DistJaccard] = 0.0f;
+		m_distType[tracking::DistHist] = 0.0f;
+		m_distType[tracking::DistGeo] = 0.0f;
 
 		assert(CheckDistance());
 	}

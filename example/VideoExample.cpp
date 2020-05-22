@@ -347,6 +347,19 @@ void VideoExample::Detection(cv::Mat frame, regions_t& regions)
     const regions_t& regs = m_detector->GetDetects();
 
     regions.assign(std::begin(regs), std::end(regs));
+
+	if (m_trackerSettings.m_useGeoCoords)
+	{
+		std::cout << "Regions: Pix2Geo: ";
+
+		for (auto& reg : regions)
+		{
+			reg.m_geoCoord = m_trackerSettings.m_geoParams.Pix2Geo(reg.m_rrect.center);
+
+			std::cout << reg.m_rrect.center << " - " << reg.m_geoCoord << "; ";
+		}
+		std::cout << std::endl;
+	}
 }
 
 ///

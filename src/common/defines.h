@@ -17,10 +17,10 @@ typedef cv::Point_<track_t> Point_t;
 typedef std::vector<int> assignments_t;
 typedef std::vector<track_t> distMatrix_t;
 
-typedef double geocoord_t;
+typedef float geocoord_t;
 typedef cv::Point_<geocoord_t> GeoPoint_t;
-#define GeoEl_t CV_64F
-#define GeoMat_t CV_64FC
+#define GeoEl_t CV_32F
+#define GeoMat_t CV_32FC
 
 ///
 /// \brief config_t
@@ -125,7 +125,7 @@ public:
 		m_geoPoints = geoPoints;
 
 		assert(m_framePoints.size() == m_geoPoints.size());
-		assert(m_framePoints.size() < 4);
+		assert(m_framePoints.size() >= 4);
 
 		bool res = true;
 
@@ -135,8 +135,20 @@ public:
 		{
 			tmpPix.emplace_back(static_cast<T>(pix.x), static_cast<T>(pix.y));
 		}
-		cv::perspectiveTransform(tmpPix, m_geoPoints, m_toGeo);
-		cv::perspectiveTransform(m_geoPoints, tmpPix, m_toPix);
+
+		std::cout << "Coords pairs: ";
+		for (size_t i = 0; i < tmpPix.size(); ++i)
+		{
+			std::cout << tmpPix[i] << " - " << m_geoPoints[i] << "; ";
+		}
+		std::cout << std::endl;
+
+		cv::Mat toGeo = cv::getPerspectiveTransform(tmpPix, m_geoPoints);
+		cv::Mat toPix = cv::getPerspectiveTransform(m_geoPoints, tmpPix);
+		m_toGeo = toGeo;
+		m_toPix = toPix;
+		std::cout << "To Geo: " << m_toGeo << std::endl;
+		std::cout << "To Pix: " << m_toPix << std::endl;
 
 		return res;
 	}
@@ -145,16 +157,16 @@ public:
 	cv::Point Geo2Pix(const cv::Point_<T>& geo) const
 	{
 		cv::Vec<T, 3> g(geo.x, geo.y, 1);
-		cv::Vec<T, 3> p = m_toPix * g;
-		return cv::Point(cvRound(p[0]), cvRound(p[1]));
+		auto p = g.t() * m_toPix;
+		return cv::Point(cvRound(p(0, 0)), cvRound(p(0, 1)));
 	}
 
 	///
 	cv::Point_<T> Pix2Geo(const cv::Point& pix) const
 	{
 		cv::Vec<T, 3> p(static_cast<T>(pix.x), static_cast<T>(pix.y), 1);
-		cv::Vec<T, 3> g = m_toGeo * p;
-		return cv::Point_<T>(g[0], g[1]);
+		auto g = p.t() * m_toGeo;
+		return cv::Point_<T>(g(0, 0), g(0, 1));
 	}
 
 	std::vector<cv::Point> GetFramePoints() const

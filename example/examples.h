@@ -114,38 +114,37 @@ protected:
     ///
     bool InitTracker(cv::UMat frame)
     {
-        TrackerSettings settings;
-		settings.SetDistance(tracking::DistRects);
-        settings.m_kalmanType = tracking::KalmanLinear;
-        settings.m_filterGoal = tracking::FilterCenter;
-        settings.m_lostTrackType = tracking::TrackCSRT;       // Use visual objects tracker for collisions resolving
-        settings.m_matchType = tracking::MatchHungrian;
-		settings.m_useAcceleration = false;                   // Use constant acceleration motion model
-		settings.m_dt = settings.m_useAcceleration ? 0.05f : 0.2f; // Delta time for Kalman filter
-		settings.m_accelNoiseMag = 0.2f;                  // Accel noise magnitude for Kalman filter
-        settings.m_distThres = 0.95f;                    // Distance threshold between region and object on two frames
+		m_trackerSettings.SetDistance(tracking::DistRects);
+        m_trackerSettings.m_kalmanType = tracking::KalmanLinear;
+        m_trackerSettings.m_filterGoal = tracking::FilterCenter;
+        m_trackerSettings.m_lostTrackType = tracking::TrackCSRT;       // Use visual objects tracker for collisions resolving
+        m_trackerSettings.m_matchType = tracking::MatchHungrian;
+		m_trackerSettings.m_useAcceleration = false;                   // Use constant acceleration motion model
+		m_trackerSettings.m_dt = m_trackerSettings.m_useAcceleration ? 0.05f : 0.2f; // Delta time for Kalman filter
+		m_trackerSettings.m_accelNoiseMag = 0.2f;                  // Accel noise magnitude for Kalman filter
+        m_trackerSettings.m_distThres = 0.95f;                    // Distance threshold between region and object on two frames
 #if 0
-		settings.m_minAreaRadiusPix = frame.rows / 20.f;
+		m_trackerSettings.m_minAreaRadiusPix = frame.rows / 20.f;
 #else
-		settings.m_minAreaRadiusPix = -1.f;
+		m_trackerSettings.m_minAreaRadiusPix = -1.f;
 #endif
-		settings.m_minAreaRadiusK = 0.8f;
+		m_trackerSettings.m_minAreaRadiusK = 0.8f;
 
-        settings.m_useAbandonedDetection = true;
-        if (settings.m_useAbandonedDetection)
+        m_trackerSettings.m_useAbandonedDetection = true;
+        if (m_trackerSettings.m_useAbandonedDetection)
         {
-            settings.m_minStaticTime = m_minStaticTime;
-            settings.m_maxStaticTime = 10;
-            settings.m_maximumAllowedSkippedFrames = cvRound(settings.m_minStaticTime * m_fps); // Maximum allowed skipped frames
-            settings.m_maxTraceLength = 2 * settings.m_maximumAllowedSkippedFrames;        // Maximum trace length
+            m_trackerSettings.m_minStaticTime = m_minStaticTime;
+            m_trackerSettings.m_maxStaticTime = 10;
+            m_trackerSettings.m_maximumAllowedSkippedFrames = cvRound(m_trackerSettings.m_minStaticTime * m_fps); // Maximum allowed skipped frames
+            m_trackerSettings.m_maxTraceLength = 2 * m_trackerSettings.m_maximumAllowedSkippedFrames;        // Maximum trace length
         }
         else
         {
-            settings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
-            settings.m_maxTraceLength = cvRound(4 * m_fps);              // Maximum trace length
+            m_trackerSettings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
+            m_trackerSettings.m_maxTraceLength = cvRound(4 * m_fps);              // Maximum trace length
         }
 
-        m_tracker = std::make_unique<CTracker>(settings);
+        m_tracker = std::make_unique<CTracker>(m_trackerSettings);
 
         return true;
     }
@@ -264,20 +263,19 @@ protected:
     ///
     bool InitTracker(cv::UMat frame)
     {
-        TrackerSettings settings;
-		settings.SetDistance(tracking::DistJaccard);
-        settings.m_kalmanType = tracking::KalmanUnscented;
-        settings.m_filterGoal = tracking::FilterRect;
-        settings.m_lostTrackType = tracking::TrackCSRT;      // Use visual objects tracker for collisions resolving
-        settings.m_matchType = tracking::MatchHungrian;
-        settings.m_dt = 0.3f;                                // Delta time for Kalman filter
-        settings.m_accelNoiseMag = 0.1f;                     // Accel noise magnitude for Kalman filter
-        settings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
-        settings.m_minAreaRadiusPix = frame.rows / 20.f;
-        settings.m_maximumAllowedSkippedFrames = cvRound(m_fps / 2);   // Maximum allowed skipped frames
-        settings.m_maxTraceLength = cvRound(5 * m_fps);            // Maximum trace length
+		m_trackerSettings.SetDistance(tracking::DistJaccard);
+        m_trackerSettings.m_kalmanType = tracking::KalmanUnscented;
+        m_trackerSettings.m_filterGoal = tracking::FilterRect;
+        m_trackerSettings.m_lostTrackType = tracking::TrackCSRT;      // Use visual objects tracker for collisions resolving
+        m_trackerSettings.m_matchType = tracking::MatchHungrian;
+        m_trackerSettings.m_dt = 0.3f;                                // Delta time for Kalman filter
+        m_trackerSettings.m_accelNoiseMag = 0.1f;                     // Accel noise magnitude for Kalman filter
+        m_trackerSettings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
+        m_trackerSettings.m_minAreaRadiusPix = frame.rows / 20.f;
+        m_trackerSettings.m_maximumAllowedSkippedFrames = cvRound(m_fps / 2);   // Maximum allowed skipped frames
+        m_trackerSettings.m_maxTraceLength = cvRound(5 * m_fps);            // Maximum trace length
 
-        m_tracker = std::make_unique<CTracker>(settings);
+        m_tracker = std::make_unique<CTracker>(m_trackerSettings);
 
         return true;
     }
@@ -361,20 +359,19 @@ protected:
     ///
     bool InitTracker(cv::UMat frame)
     {
-        TrackerSettings settings;
-		settings.SetDistance(tracking::DistRects);
-        settings.m_kalmanType = tracking::KalmanLinear;
-        settings.m_filterGoal = tracking::FilterRect;
-        settings.m_lostTrackType = tracking::TrackCSRT;   // Use visual objects tracker for collisions resolving
-        settings.m_matchType = tracking::MatchHungrian;
-        settings.m_dt = 0.3f;                             // Delta time for Kalman filter
-        settings.m_accelNoiseMag = 0.1f;                  // Accel noise magnitude for Kalman filter
-        settings.m_distThres = 0.8f;                      // Distance threshold between region and object on two frames
-        settings.m_minAreaRadiusPix = frame.rows / 20.f;
-        settings.m_maximumAllowedSkippedFrames = cvRound(m_fps);   // Maximum allowed skipped frames
-        settings.m_maxTraceLength = cvRound(5 * m_fps);   // Maximum trace length
+		m_trackerSettings.SetDistance(tracking::DistRects);
+        m_trackerSettings.m_kalmanType = tracking::KalmanLinear;
+        m_trackerSettings.m_filterGoal = tracking::FilterRect;
+        m_trackerSettings.m_lostTrackType = tracking::TrackCSRT;   // Use visual objects tracker for collisions resolving
+        m_trackerSettings.m_matchType = tracking::MatchHungrian;
+        m_trackerSettings.m_dt = 0.3f;                             // Delta time for Kalman filter
+        m_trackerSettings.m_accelNoiseMag = 0.1f;                  // Accel noise magnitude for Kalman filter
+        m_trackerSettings.m_distThres = 0.8f;                      // Distance threshold between region and object on two frames
+        m_trackerSettings.m_minAreaRadiusPix = frame.rows / 20.f;
+        m_trackerSettings.m_maximumAllowedSkippedFrames = cvRound(m_fps);   // Maximum allowed skipped frames
+        m_trackerSettings.m_maxTraceLength = cvRound(5 * m_fps);   // Maximum trace length
 
-        m_tracker = std::make_unique<CTracker>(settings);
+        m_tracker = std::make_unique<CTracker>(m_trackerSettings);
 
         return true;
     }
@@ -459,20 +456,19 @@ protected:
     ///
     bool InitTracker(cv::UMat frame)
     {
-        TrackerSettings settings;
-		settings.SetDistance(tracking::DistRects);
-        settings.m_kalmanType = tracking::KalmanLinear;
-        settings.m_filterGoal = tracking::FilterRect;
-        settings.m_lostTrackType = tracking::TrackCSRT;      // Use visual objects tracker for collisions resolving
-        settings.m_matchType = tracking::MatchHungrian;
-        settings.m_dt = 0.3f;                                // Delta time for Kalman filter
-        settings.m_accelNoiseMag = 0.1f;                     // Accel noise magnitude for Kalman filter
-        settings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
-        settings.m_minAreaRadiusPix = frame.rows / 20.f;
-        settings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
-        settings.m_maxTraceLength = cvRound(5 * m_fps);      // Maximum trace length
+		m_trackerSettings.SetDistance(tracking::DistRects);
+        m_trackerSettings.m_kalmanType = tracking::KalmanLinear;
+        m_trackerSettings.m_filterGoal = tracking::FilterRect;
+        m_trackerSettings.m_lostTrackType = tracking::TrackCSRT;      // Use visual objects tracker for collisions resolving
+        m_trackerSettings.m_matchType = tracking::MatchHungrian;
+        m_trackerSettings.m_dt = 0.3f;                                // Delta time for Kalman filter
+        m_trackerSettings.m_accelNoiseMag = 0.1f;                     // Accel noise magnitude for Kalman filter
+        m_trackerSettings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
+        m_trackerSettings.m_minAreaRadiusPix = frame.rows / 20.f;
+        m_trackerSettings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
+        m_trackerSettings.m_maxTraceLength = cvRound(5 * m_fps);      // Maximum trace length
 
-        m_tracker = std::make_unique<CTracker>(settings);
+        m_tracker = std::make_unique<CTracker>(m_trackerSettings);
 
         return true;
     }
@@ -580,20 +576,19 @@ protected:
     ///
     bool InitTracker(cv::UMat frame)
     {
-        TrackerSettings settings;
-		settings.SetDistance(tracking::DistRects);
-        settings.m_kalmanType = tracking::KalmanLinear;
-        settings.m_filterGoal = tracking::FilterRect;
-        settings.m_lostTrackType = tracking::TrackCSRT;      // Use visual objects tracker for collisions resolving
-        settings.m_matchType = tracking::MatchHungrian;
-        settings.m_dt = 0.3f;                                // Delta time for Kalman filter
-        settings.m_accelNoiseMag = 0.2f;                     // Accel noise magnitude for Kalman filter
-        settings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
-        settings.m_minAreaRadiusPix = frame.rows / 20.f;
-        settings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
-        settings.m_maxTraceLength = cvRound(5 * m_fps);      // Maximum trace length
+		m_trackerSettings.SetDistance(tracking::DistRects);
+        m_trackerSettings.m_kalmanType = tracking::KalmanLinear;
+        m_trackerSettings.m_filterGoal = tracking::FilterRect;
+        m_trackerSettings.m_lostTrackType = tracking::TrackCSRT;      // Use visual objects tracker for collisions resolving
+        m_trackerSettings.m_matchType = tracking::MatchHungrian;
+        m_trackerSettings.m_dt = 0.3f;                                // Delta time for Kalman filter
+        m_trackerSettings.m_accelNoiseMag = 0.2f;                     // Accel noise magnitude for Kalman filter
+        m_trackerSettings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
+        m_trackerSettings.m_minAreaRadiusPix = frame.rows / 20.f;
+        m_trackerSettings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
+        m_trackerSettings.m_maxTraceLength = cvRound(5 * m_fps);      // Maximum trace length
 
-        m_tracker = std::make_unique<CTracker>(settings);
+        m_tracker = std::make_unique<CTracker>(m_trackerSettings);
 
         return true;
     }
@@ -652,6 +647,7 @@ public:
 	}
 
 protected:
+
     ///
     /// \brief InitDetector
     /// \param frame
@@ -721,32 +717,44 @@ protected:
     ///
     bool InitTracker(cv::UMat frame)
 	{
-		TrackerSettings settings;
-        settings.SetDistance(tracking::DistRects);
-		settings.m_kalmanType = tracking::KalmanLinear;
-        settings.m_filterGoal = tracking::FilterCenter;
-        settings.m_lostTrackType = tracking::TrackCSRT;      // Use visual objects tracker for collisions resolving
-		settings.m_matchType = tracking::MatchHungrian;
-		settings.m_useAcceleration = false;                   // Use constant acceleration motion model
-		settings.m_dt = settings.m_useAcceleration ? 0.05f : 0.4f; // Delta time for Kalman filter
-		settings.m_accelNoiseMag = 0.2f;                     // Accel noise magnitude for Kalman filter
-        settings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
+        m_trackerSettings.SetDistance(tracking::DistRects);
+		m_trackerSettings.m_kalmanType = tracking::KalmanLinear;
+        m_trackerSettings.m_filterGoal = tracking::FilterCenter;
+        m_trackerSettings.m_lostTrackType = tracking::TrackCSRT;      // Use visual objects tracker for collisions resolving
+		m_trackerSettings.m_matchType = tracking::MatchHungrian;
+		m_trackerSettings.m_useAcceleration = false;                   // Use constant acceleration motion model
+		m_trackerSettings.m_dt = m_trackerSettings.m_useAcceleration ? 0.05f : 0.4f; // Delta time for Kalman filter
+		m_trackerSettings.m_accelNoiseMag = 0.2f;                     // Accel noise magnitude for Kalman filter
+        m_trackerSettings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
 #if 0
-		settings.m_minAreaRadiusPix = frame.rows / 20.f;
+		m_trackerSettings.m_minAreaRadiusPix = frame.rows / 20.f;
 #else
-		settings.m_minAreaRadiusPix = -1.f;
+		m_trackerSettings.m_minAreaRadiusPix = -1.f;
 #endif
-		settings.m_minAreaRadiusK = 0.8f;
-		settings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
-		settings.m_maxTraceLength = cvRound(2 * m_fps);      // Maximum trace length
+		m_trackerSettings.m_minAreaRadiusK = 0.8f;
+		m_trackerSettings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
+		m_trackerSettings.m_maxTraceLength = cvRound(2 * m_fps);      // Maximum trace length
 
-		settings.AddNearTypes("car", "bus", true);
-		settings.AddNearTypes("car", "truck", true);
-		settings.AddNearTypes("bus", "truck", true);
-		settings.AddNearTypes("person", "bicycle", true);
-		settings.AddNearTypes("person", "motorbike", true);
+#if 1
+		m_trackerSettings.m_useGeoCoords = true;
+		std::vector<cv::Point> framePoints{ cv::Point(1111, 498), cv::Point(190, 334), cv::Point(380, 188), cv::Point(1182, 252) };
+		std::vector<GeoPoint_t> geoPoints{ GeoPoint_t(60.006536, 30.258845), GeoPoint_t(60.006848, 30.258053), GeoPoint_t(60.007416, 30.258088), GeoPoint_t(60.007063, 30.259074) };
+		m_trackerSettings.m_geoParams.SetKeyPoints(framePoints, geoPoints);
+		m_trackerSettings.SetDistance(tracking::DistGeo);
+		m_trackerSettings.m_distThres = 2.0f;  // For Geo distance this value mean meters
+		m_trackerSettings.m_minAreaRadiusPix = -1.f;
+#else
+		m_trackerSettings.m_useGeoCoords = false;
+#endif
 
-		m_tracker = std::make_unique<CTracker>(settings);
+
+		m_trackerSettings.AddNearTypes("car", "bus", true);
+		m_trackerSettings.AddNearTypes("car", "truck", true);
+		m_trackerSettings.AddNearTypes("bus", "truck", true);
+		m_trackerSettings.AddNearTypes("person", "bicycle", true);
+		m_trackerSettings.AddNearTypes("person", "motorbike", true);
+
+		m_tracker = std::make_unique<CTracker>(m_trackerSettings);
 
 		return true;
 	}
@@ -764,6 +772,15 @@ protected:
 		if (m_showLogs)
 		{
 			std::cout << "Frame " << framesCounter << ": tracks = " << m_tracks.size() << ", time = " << currTime << std::endl;
+		}
+
+		if (m_trackerSettings.m_useGeoCoords)
+		{
+			std::vector<cv::Point> points = m_trackerSettings.m_geoParams.GetFramePoints();
+			for (size_t i = 0; i < points.size(); ++i)
+			{
+				cv::line(frame, points[i % points.size()], points[(i + 1) % points.size()], cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
+			}
 		}
 
 		for (const auto& track : m_tracks)
@@ -884,25 +901,24 @@ protected:
 	///
 	bool InitTracker(cv::UMat frame)
 	{
-		TrackerSettings settings;
-		settings.SetDistance(tracking::DistCenters);
-		settings.m_kalmanType = tracking::KalmanLinear;
-		settings.m_filterGoal = tracking::FilterCenter;
-		settings.m_lostTrackType = tracking::TrackKCF;      // Use visual objects tracker for collisions resolving
-		settings.m_matchType = tracking::MatchHungrian;
-		settings.m_dt = 0.3f;                                // Delta time for Kalman filter
-		settings.m_accelNoiseMag = 0.2f;                     // Accel noise magnitude for Kalman filter
-		settings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
-		settings.m_minAreaRadiusPix = frame.rows / 20.f;
-		settings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
-		settings.m_maxTraceLength = cvRound(5 * m_fps);      // Maximum trace length
+		m_trackerSettings.SetDistance(tracking::DistCenters);
+		m_trackerSettings.m_kalmanType = tracking::KalmanLinear;
+		m_trackerSettings.m_filterGoal = tracking::FilterCenter;
+		m_trackerSettings.m_lostTrackType = tracking::TrackKCF;      // Use visual objects tracker for collisions resolving
+		m_trackerSettings.m_matchType = tracking::MatchHungrian;
+		m_trackerSettings.m_dt = 0.3f;                                // Delta time for Kalman filter
+		m_trackerSettings.m_accelNoiseMag = 0.2f;                     // Accel noise magnitude for Kalman filter
+		m_trackerSettings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
+		m_trackerSettings.m_minAreaRadiusPix = frame.rows / 20.f;
+		m_trackerSettings.m_maximumAllowedSkippedFrames = cvRound(2 * m_fps); // Maximum allowed skipped frames
+		m_trackerSettings.m_maxTraceLength = cvRound(5 * m_fps);      // Maximum trace length
 
-		settings.AddNearTypes("car", "bus", false);
-		settings.AddNearTypes("car", "truck", false);
-		settings.AddNearTypes("person", "bicycle", true);
-		settings.AddNearTypes("person", "motorbike", true);
+		m_trackerSettings.AddNearTypes("car", "bus", false);
+		m_trackerSettings.AddNearTypes("car", "truck", false);
+		m_trackerSettings.AddNearTypes("person", "bicycle", true);
+		m_trackerSettings.AddNearTypes("person", "motorbike", true);
 
-		m_tracker = std::make_unique<CTracker>(settings);
+		m_tracker = std::make_unique<CTracker>(m_trackerSettings);
 
 		return true;
 	}

@@ -32,6 +32,7 @@ public:
 protected:
     std::unique_ptr<BaseDetector> m_detector;
     std::unique_ptr<CTracker> m_tracker;
+	TrackerSettings m_trackerSettings;
 
 	std::vector<TrackingObject> m_tracks;
 
