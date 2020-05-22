@@ -31,10 +31,11 @@ struct TrajectoryPoint
     /// \brief TrajectoryPoint
     /// \param prediction
     ///
-    TrajectoryPoint(const Point_t& prediction)
+    TrajectoryPoint(const Point_t& prediction, const GeoPoint_t& geoPoint)
         :
           m_hasRaw(false),
-          m_prediction(prediction)
+          m_prediction(prediction),
+		  m_geoPoint(geoPoint)
     {
     }
 
@@ -43,17 +44,19 @@ struct TrajectoryPoint
     /// \param prediction
     /// \param raw
     ///
-    TrajectoryPoint(const Point_t& prediction, const Point_t& raw)
+    TrajectoryPoint(const Point_t& prediction, const Point_t& raw, const GeoPoint_t& geoPoint)
         :
           m_hasRaw(true),
           m_prediction(prediction),
-          m_raw(raw)
+          m_raw(raw),
+		  m_geoPoint(geoPoint)
     {
     }
 
     bool m_hasRaw = false;
     Point_t m_prediction;
     Point_t m_raw;
+	GeoPoint_t m_geoPoint;
 };
 
 // --------------------------------------------------------------------------
@@ -106,13 +109,13 @@ public:
     /// \brief push_back
     /// \param prediction
     ///
-    void push_back(const Point_t& prediction)
+    void push_back(const Point_t& prediction, const GeoPoint_t& geoPoint)
     {
-        m_trace.emplace_back(prediction);
+        m_trace.emplace_back(prediction, geoPoint);
     }
-    void push_back(const Point_t& prediction, const Point_t& raw)
+    void push_back(const Point_t& prediction, const Point_t& raw, const GeoPoint_t& geoPoint)
     {
-        m_trace.emplace_back(prediction, raw);
+        m_trace.emplace_back(prediction, raw, geoPoint);
     }
 
     ///
@@ -122,13 +125,9 @@ public:
     void pop_front(size_t count)
     {
         if (count < size())
-        {
             m_trace.erase(m_trace.begin(), m_trace.begin() + count);
-        }
         else
-        {
             m_trace.clear();
-        }
     }
 
     ///
@@ -185,13 +184,9 @@ struct TrackingObject
 		{
             auto tp = trace.at(i);
             if (tp.m_hasRaw)
-            {
-                m_trace.push_back(tp.m_prediction, tp.m_raw);
-            }
+                m_trace.push_back(tp.m_prediction, tp.m_raw, tp.m_geoPoint);
             else
-            {
-                m_trace.push_back(tp.m_prediction);
-            }
+                m_trace.push_back(tp.m_prediction, tp.m_geoPoint);
 		}
 	}
 
@@ -204,18 +199,26 @@ struct TrackingObject
 		{
             float sr = m_rrect.size.width / m_rrect.size.height;
 			if (sizeRatio.width > 0)
-			{
 				res &= (sr > sizeRatio.width);
-			}
+
 			if (sizeRatio.height > 0)
-			{
 				res &= (sr < sizeRatio.height);
-			}
 		}
 		if (m_outOfTheFrame)
-		{
 			res = false;
-		}
+
+		return res;
+	}
+
+	track_t Distance(size_t& period) const
+	{
+		if (period > m_trace.size())
+			period = m_trace.size();
+
+		const auto& from = m_trace.at(m_trace.size() - period);
+		const auto& to = m_trace.at(m_trace.size() - 1);
+
+		auto res = DistanceInMeters(from.m_geoPoint, to.m_geoPoint);
 		return res;
 	}
 };

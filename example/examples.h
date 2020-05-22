@@ -794,10 +794,21 @@ protected:
 
 
 				std::stringstream label;
-#if 1
+#if 0
 				label << track.m_type << std::setprecision(2) << ": " << track.m_confidence;
 #else
-				label << track.m_type << " " << std::setprecision(2) << track.m_velocity << ": " << track.m_confidence;
+				if (m_trackerSettings.m_useGeoCoords)
+				{
+					std::cout << "Video fps " << m_fps << std::endl;
+					size_t period = cvRound(m_fps);
+					auto dist = track.Distance(period);
+					auto velocity = (3.6f * dist * m_fps) / period;
+					if (velocity < 1.f || std::isnan(velocity))
+						velocity = 0;
+					label << track.m_type << " " << std::setw(2) << std::setprecision(2) << velocity << " km/h: " << track.m_confidence;
+				}
+				else
+					label << track.m_type << " " << std::setprecision(2) << track.m_velocity << ": " << track.m_confidence;
 #endif
 				int baseLine = 0;
 				cv::Size labelSize = cv::getTextSize(label.str(), cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);

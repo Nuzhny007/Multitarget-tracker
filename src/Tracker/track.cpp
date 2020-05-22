@@ -187,13 +187,13 @@ void CTrack::Update(
         //std::cout << m_lastRegion.m_brect << " - " << region.m_brect << std::endl;
 
         m_lastRegion = region;
-        m_trace.push_back(m_predictionPoint, region.m_rrect.center);
+        m_trace.push_back(m_predictionPoint, region.m_rrect.center, m_predictionGeoPoint);
 
         CheckStatic(trajLen, currFrame, region);
     }
     else
     {
-        m_trace.push_back(m_predictionPoint);
+        m_trace.push_back(m_predictionPoint, m_predictionGeoPoint);
     }
 
     if (m_trace.size() > max_trace_length)
