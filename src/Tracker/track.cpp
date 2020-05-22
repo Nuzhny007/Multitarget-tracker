@@ -902,7 +902,7 @@ void CTrack::PointUpdate(
 		m_predictionGeoPoint = m_kalman.Update(pt, dataCorrect);
 		m_predictionPoint = m_geoParams.Geo2Pix(m_predictionGeoPoint);
 
-		std::cout << "Track::PointUpdate from " << m_predictionGeoPoint << " to " << m_predictionPoint << ", center " << m_lastRegion.m_rrect.center << std::endl;
+		//std::cout << "Track::PointUpdate from " << m_predictionGeoPoint << " to " << m_predictionPoint << ", center " << m_lastRegion.m_rrect.center << std::endl;
 	}
 	else
 	{

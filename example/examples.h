@@ -737,8 +737,8 @@ protected:
 
 #if 1
 		m_trackerSettings.m_useGeoCoords = true;
-		std::vector<cv::Point> framePoints{ cv::Point(1111, 498), cv::Point(190, 334), cv::Point(380, 188), cv::Point(1182, 252) };
-		std::vector<GeoPoint_t> geoPoints{ GeoPoint_t(60.006536, 30.258845), GeoPoint_t(60.006848, 30.258053), GeoPoint_t(60.007416, 30.258088), GeoPoint_t(60.007063, 30.259074) };
+		std::vector<cv::Point> framePoints{ cv::Point(1110, 497), cv::Point(164, 347), cv::Point(380, 188), cv::Point(1182, 252) };
+		std::vector<GeoPoint_t> geoPoints{ GeoPoint_t(60.006536, 30.258855), GeoPoint_t(60.006855, 30.258051), GeoPoint_t(60.007414, 30.258080), GeoPoint_t(60.007064, 30.259066) };
 		m_trackerSettings.m_geoParams.SetKeyPoints(framePoints, geoPoints);
 		m_trackerSettings.SetDistance(tracking::DistGeo);
 		m_trackerSettings.m_distThres = 2.0f;  // For Geo distance this value mean meters

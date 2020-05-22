@@ -135,20 +135,20 @@ public:
 		{
 			tmpPix.emplace_back(static_cast<T>(pix.x), static_cast<T>(pix.y));
 		}
-
+#if 0
 		std::cout << "Coords pairs: ";
 		for (size_t i = 0; i < tmpPix.size(); ++i)
 		{
 			std::cout << tmpPix[i] << " - " << m_geoPoints[i] << "; ";
 		}
 		std::cout << std::endl;
-
+#endif
 		cv::Mat toGeo = cv::getPerspectiveTransform(tmpPix, m_geoPoints);
 		cv::Mat toPix = cv::getPerspectiveTransform(m_geoPoints, tmpPix);
 		m_toGeo = toGeo;
 		m_toPix = toPix;
-		std::cout << "To Geo: " << m_toGeo << std::endl;
-		std::cout << "To Pix: " << m_toPix << std::endl;
+		//std::cout << "To Geo: " << m_toGeo << std::endl;
+		//std::cout << "To Pix: " << m_toPix << std::endl;
 
 		return res;
 	}
@@ -157,16 +157,16 @@ public:
 	cv::Point Geo2Pix(const cv::Point_<T>& geo) const
 	{
 		cv::Vec<T, 3> g(geo.x, geo.y, 1);
-		auto p = g.t() * m_toPix;
-		return cv::Point(cvRound(p(0, 0)), cvRound(p(0, 1)));
+		auto p = m_toPix * g;
+		return cv::Point(cvRound(p[0] / p[2]), cvRound(p[1] / p[2]));
 	}
 
 	///
 	cv::Point_<T> Pix2Geo(const cv::Point& pix) const
 	{
 		cv::Vec<T, 3> p(static_cast<T>(pix.x), static_cast<T>(pix.y), 1);
-		auto g = p.t() * m_toGeo;
-		return cv::Point_<T>(g(0, 0), g(0, 1));
+		auto g = m_toGeo * p;
+		return cv::Point_<T>(g[0] / g[2], g[1] / g[2]);
 	}
 
 	std::vector<cv::Point> GetFramePoints() const
