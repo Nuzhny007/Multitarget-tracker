@@ -52,7 +52,7 @@ CTrack::CTrack(
 			m_kalman.Update(m_predictionPoint, true);
 	}
 
-    m_trace.push_back(m_predictionPoint, m_predictionPoint);
+    m_trace.push_back(m_predictionPoint, m_predictionPoint, m_predictionGeoPoint);
 }
 
 ///
