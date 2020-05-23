@@ -210,10 +210,11 @@ struct TrackingObject
 		return res;
 	}
 
+	///
 	track_t Distance(size_t& period) const
 	{
-		if (period > m_trace.size())
-			period = m_trace.size();
+		if (period >= m_trace.size())
+			period = m_trace.size() - 1;
 
 		const auto& from = m_trace.at(m_trace.size() - period);
 		const auto& to = m_trace.at(m_trace.size() - 1);

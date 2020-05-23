@@ -737,11 +737,16 @@ protected:
 
 #if 1
 		m_trackerSettings.m_useGeoCoords = true;
+#if 1
+		std::vector<cv::Point> framePoints{ cv::Point(420, 348), cv::Point(509, 283), cv::Point(731, 281), cv::Point(840, 343) };
+		std::vector<GeoPoint_t> geoPoints{ GeoPoint_t(45.526646, 5.974535), GeoPoint_t(45.527566, 5.973849), GeoPoint_t(45.527904, 5.974135), GeoPoint_t(45.526867, 5.974826) };
+#else
 		std::vector<cv::Point> framePoints{ cv::Point(1110, 497), cv::Point(164, 347), cv::Point(380, 188), cv::Point(1182, 252) };
 		std::vector<GeoPoint_t> geoPoints{ GeoPoint_t(60.006536, 30.258855), GeoPoint_t(60.006855, 30.258051), GeoPoint_t(60.007414, 30.258080), GeoPoint_t(60.007064, 30.259066) };
+#endif
 		m_trackerSettings.m_geoParams.SetKeyPoints(framePoints, geoPoints);
 		m_trackerSettings.SetDistance(tracking::DistGeo);
-		m_trackerSettings.m_distThres = 2.0f;  // For Geo distance this value mean meters
+		m_trackerSettings.m_distThres = 4.0f;  // For Geo distance this value mean meters
 		m_trackerSettings.m_minAreaRadiusPix = -1.f;
 #else
 		m_trackerSettings.m_useGeoCoords = false;
@@ -792,20 +797,26 @@ protected:
 			{
 				DrawTrack(frame, 1, track, false);
 
-
 				std::stringstream label;
 #if 0
 				label << track.m_type << std::setprecision(2) << ": " << track.m_confidence;
 #else
 				if (m_trackerSettings.m_useGeoCoords)
 				{
-					std::cout << "Video fps " << m_fps << std::endl;
-					size_t period = cvRound(m_fps);
+					size_t period = 2 * cvRound(m_fps);
 					auto dist = track.Distance(period);
-					auto velocity = (3.6f * dist * m_fps) / period;
-					if (velocity < 1.f || std::isnan(velocity))
-						velocity = 0;
-					label << track.m_type << " " << std::setw(2) << std::setprecision(2) << velocity << " km/h: " << track.m_confidence;
+					if (period >= cvRound(m_fps) / 4)
+					{
+						auto velocity = (3.6f * dist * m_fps) / period;
+						//std::cout << track.m_type << ": distance " << std::fixed << std::setw(2) << std::setprecision(2) << dist << " on time " << (period / m_fps) << " with velocity " << velocity << " km/h: " << track.m_confidence << std::endl;
+						if (velocity < 1.f || std::isnan(velocity))
+							velocity = 0;
+						label << track.m_type << " " << std::fixed << std::setw(2) << std::setprecision(2) << velocity << " km/h";// << track.m_confidence;
+					}
+					else
+					{
+						label << track.m_type << std::setprecision(2) << ": " << track.m_confidence;
+					}
 				}
 				else
 					label << track.m_type << " " << std::setprecision(2) << track.m_velocity << ": " << track.m_confidence;
@@ -834,7 +845,7 @@ protected:
 					brect.y = std::max(0, frame.rows - brect.height - 1);
 					brect.height = std::min(brect.height, frame.rows - 1);
 				}
-				DrawFilledRect(frame, cv::Rect(cv::Point(brect.x, brect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(200, 200, 200), 150);
+				DrawFilledRect(frame, cv::Rect(cv::Point(brect.x, brect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(200, 200, 200), 200);
                 cv::putText(frame, label.str(), brect.tl(), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
 			}
 		}
