@@ -48,6 +48,7 @@ else(HAVE_FILESYSTEM)
     message("Do not found filesystem header")
 endif(HAVE_FILESYSTEM)
 
+add_subdirectory(combined)
 
 option(BUILD_EXAMPLES "Should compiled examples (motion detection, pedestrians, faces, DNNs etc)?" ON)
 if (BUILD_EXAMPLES)
