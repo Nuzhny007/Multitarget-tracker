@@ -18,11 +18,11 @@ public:
     PedestrianDetector(const cv::UMat& gray);
     ~PedestrianDetector(void) = default;
 
-    bool Init(const config_t& config);
+    bool Init(const config_t& config) override;
 
-    void Detect(const cv::UMat& gray);
+    void Detect(const cv::UMat& gray) override;
 
-	bool CanGrayProcessing() const
+	bool CanGrayProcessing() const override
 	{
 		return true;
 	}

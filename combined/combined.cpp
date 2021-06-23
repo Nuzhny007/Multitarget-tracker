@@ -134,13 +134,9 @@ void CombinedDetector::SyncProcess()
 		int waitTime = manualMode ? 0 : 1;// std::max<int>(1, cvRound(1000 / m_fps - currTime));
         int k = cv::waitKey(waitTime);
         if (k == 27)
-        {
             break;
-        }
         else if (k == 'm' || k == 'M')
-        {
             manualMode = !manualMode;
-        }
 #else
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 #endif
@@ -177,10 +173,14 @@ void CombinedDetector::DetectAndTrack(cv::Mat frame)
 	m_trackerDNN->Update(regsDNN, uframe, m_fps);
 	m_trackerDNN->GetTracks(m_tracksDNN);
 
+    m_detectorBGFG->ResetIgnoreMask();
 	for (const auto& track : m_tracksDNN)
 	{
 		if (track.IsRobust(2, 0.5f, cv::Size2f(0.1f, 8.0f)))
+        {
 			AddBbox(track.m_rrect.boundingRect());
+            m_detectorBGFG->UpdateIgnoreMask(uframe, track.m_rrect.boundingRect());
+        }
 	}
 
 	// BGFG detection
@@ -189,7 +189,9 @@ void CombinedDetector::DetectAndTrack(cv::Mat frame)
 	for (const auto& track : m_tracksBGFG)
 	{
 		if (track.m_isStatic)
-			m_detectorBGFG->ResetModel(uGray, track.m_rrect.boundingRect());
+        {
+			//m_detectorBGFG->UpdateIgnoreMask(uGray, track.m_rrect.boundingRect());
+        }
 	}
 
     m_detectorBGFG->Detect(uGray);
@@ -202,7 +204,7 @@ void CombinedDetector::DetectAndTrack(cv::Mat frame)
 	for (const auto& bbox : m_oldBoxes)
 	{
 		//std::cout << "ResetModel: " << bbox.m_rect << ", " << bbox.m_lifeTime << std::endl;
-		m_detectorBGFG->ResetModel(uGray, bbox.m_rect);
+		//m_detectorBGFG->UpdateIgnoreMask(uGray, bbox.m_rect);
 	}
 	CleanBboxes();
 }
@@ -225,9 +227,7 @@ bool CombinedDetector::AddBbox(const cv::Rect& rect)
 		}
 	}
 	if (!founded)
-	{
 		m_oldBoxes.emplace_back(rect, m_maxLifeTime);
-	}
 	//std::cout << "Add res = " << founded << std::endl;
 	return !founded;
 }
@@ -264,14 +264,14 @@ bool CombinedDetector::InitDetector(cv::UMat frame)
 	config_t configBGFG;
 	configBGFG.emplace("useRotatedRect", "0");
 
-	tracking::Detectors detectorType = tracking::Detectors::Motion_VIBE;
+	tracking::Detectors detectorType = tracking::Detectors::Motion_MOG2;
 
 	switch (detectorType)
 	{
 	case tracking::Detectors::Motion_VIBE:
 		configBGFG.emplace("samples", "20");
-		configBGFG.emplace("pixelNeighbor", "3");
-		configBGFG.emplace("distanceThreshold", "18");
+		configBGFG.emplace("pixelNeighbor", "2");
+		configBGFG.emplace("distanceThreshold", "15");
 		configBGFG.emplace("matchingThreshold", "3");
 		configBGFG.emplace("updateFactor", "16");
 		break;
@@ -344,7 +344,13 @@ bool CombinedDetector::InitDetector(cv::UMat frame)
 	configDNN.emplace("classNames", pathToModel + "coco.names");
 	configDNN.emplace("maxCropRatio", "-1");
 
-	configDNN.emplace("white_list", "person");
+	configDNN.emplace("white_list", std::to_string((objtype_t)ObjectTypes::obj_person));
+	configDNN.emplace("white_list", std::to_string((objtype_t)ObjectTypes::obj_car));
+	configDNN.emplace("white_list", std::to_string((objtype_t)ObjectTypes::obj_bicycle));
+	configDNN.emplace("white_list", std::to_string((objtype_t)ObjectTypes::obj_motorbike));
+	configDNN.emplace("white_list", std::to_string((objtype_t)ObjectTypes::obj_bus));
+	configDNN.emplace("white_list", std::to_string((objtype_t)ObjectTypes::obj_truck));
+    configDNN.emplace("white_list", std::to_string((objtype_t)ObjectTypes::obj_vehicle));
 
 	m_detectorDNN = std::unique_ptr<BaseDetector>(CreateDetector(tracking::Detectors::Yolo_Darknet, configDNN, frame));
 	if (m_detectorDNN.get())
@@ -361,10 +367,10 @@ bool CombinedDetector::InitTracker(cv::UMat frame)
 {
 	// Create BGFG tracker
 	TrackerSettings settingsBGFG;
-	settingsBGFG.SetDistance(tracking::DistRects);
+	settingsBGFG.SetDistance(tracking::DistCenters);
 	settingsBGFG.m_kalmanType = tracking::KalmanLinear;
 	settingsBGFG.m_filterGoal = tracking::FilterCenter;
-	settingsBGFG.m_lostTrackType = tracking::TrackCSRT;       // Use visual objects tracker for collisions resolving
+	settingsBGFG.m_lostTrackType = tracking::TrackNone;       // Use visual objects tracker for collisions resolving
 	settingsBGFG.m_matchType = tracking::MatchHungrian;
 	settingsBGFG.m_useAcceleration = false;                   // Use constant acceleration motion model
 	settingsBGFG.m_dt = settingsBGFG.m_useAcceleration ? 0.05f : 0.2f; // Delta time for Kalman filter
@@ -381,7 +387,7 @@ bool CombinedDetector::InitTracker(cv::UMat frame)
 	if (settingsBGFG.m_useAbandonedDetection)
 	{
 		settingsBGFG.m_minStaticTime = m_minStaticTime;
-		settingsBGFG.m_maxStaticTime = 10;
+		settingsBGFG.m_maxStaticTime = 30;
 		settingsBGFG.m_maximumAllowedSkippedFrames = cvRound(settingsBGFG.m_minStaticTime * m_fps); // Maximum allowed skipped frames
 		settingsBGFG.m_maxTraceLength = 2 * settingsBGFG.m_maximumAllowedSkippedFrames;        // Maximum trace length
 	}
@@ -397,8 +403,8 @@ bool CombinedDetector::InitTracker(cv::UMat frame)
 	TrackerSettings settingsDNN;
 	settingsDNN.SetDistance(tracking::DistCenters);
 	settingsDNN.m_kalmanType = tracking::KalmanLinear;
-	settingsDNN.m_filterGoal = tracking::FilterRect;
-	settingsDNN.m_lostTrackType = tracking::TrackCSRT;      // Use visual objects tracker for collisions resolving
+	settingsDNN.m_filterGoal = tracking::FilterCenter;
+	settingsDNN.m_lostTrackType = tracking::TrackNone;      // Use visual objects tracker for collisions resolving
 	settingsDNN.m_matchType = tracking::MatchHungrian;
 	settingsDNN.m_useAcceleration = false;                   // Use constant acceleration motion model
 	settingsDNN.m_dt = settingsDNN.m_useAcceleration ? 0.05f : 0.4f; // Delta time for Kalman filter
@@ -433,10 +439,9 @@ void CombinedDetector::DrawData(cv::Mat frame, int framesCounter, int currTime)
 
 	for (const auto& track : m_tracksBGFG)
 	{
-		if (track.IsRobust(cvRound(m_fps / 4),          // Minimal trajectory size
-			0.7f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
-			cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
-			)
+		if (track.IsRobust(cvRound(4),          // Minimal trajectory size
+			0.2f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
+			cv::Size2f(0.1f, 8.0f)))      // Min and max ratio: width / height
 		{
 			if (track.m_isStatic)
 			{
@@ -472,7 +477,7 @@ void CombinedDetector::DrawData(cv::Mat frame, int framesCounter, int currTime)
 			}
 			else
 			{
-#if 1
+#if 0
 				DrawTrack(frame, 1, track, true);
 #endif
 			}
@@ -483,16 +488,14 @@ void CombinedDetector::DrawData(cv::Mat frame, int framesCounter, int currTime)
 
 	for (const auto& track : m_tracksDNN)
 	{
-		if (track.IsRobust(2,            // Minimal trajectory size
-			0.5f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
-			cv::Size2f(0.1f, 8.0f))      // Min and max ratio: width / height
-			)
+		if (track.IsRobust(4,            // Minimal trajectory size
+			0.85f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
+			cv::Size2f(0.1f, 8.0f)))      // Min and max ratio: width / height
 		{
 			DrawTrack(frame, 1, track);
 
-
 			std::stringstream label;
-			label << track.m_type << " (" << track.m_ID.ID2Str() << "): " << track.m_confidence;
+			label << TypeConverter::Type2Str(track.m_type) << " " << track.m_ID.ID2Str();// << "): " << std::fixed << std::setw(2) << std::setprecision(2) << track.m_confidence;
 			int baseLine = 0;
 			cv::Size labelSize = cv::getTextSize(label.str(), cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
 
@@ -565,11 +568,7 @@ void CombinedDetector::DrawData(cv::Mat frame, int framesCounter, int currTime)
 /// \param track
 /// \param drawTrajectory
 ///
-void CombinedDetector::DrawTrack(cv::Mat frame,
-                             int resizeCoeff,
-                             const TrackingObject& track,
-                             bool drawTrajectory
-                             )
+void CombinedDetector::DrawTrack(cv::Mat frame, int resizeCoeff, const TrackingObject& track, bool drawTrajectory)
 {
     auto ResizePoint = [resizeCoeff](const cv::Point& pt) -> cv::Point
     {
@@ -594,9 +593,7 @@ void CombinedDetector::DrawTrack(cv::Mat frame,
             const TrajectoryPoint& pt2 = track.m_trace.at(j + 1);
             cv::line(frame, ResizePoint(pt1.m_prediction), ResizePoint(pt2.m_prediction), cl, 1, cv::LINE_AA);
             if (!pt2.m_hasRaw)
-            {
                 cv::circle(frame, ResizePoint(pt2.m_prediction), 4, cl, 1, cv::LINE_AA);
-            }
         }
     }
 }
@@ -645,9 +642,8 @@ bool CombinedDetector::WriteFrame(cv::VideoWriter& writer, const cv::Mat& frame)
     if (!m_outFile.empty())
     {
         if (!writer.isOpened())
-        {
             writer.open(m_outFile, m_fourcc, m_fps, frame.size(), true);
-        }
+
         if (writer.isOpened())
         {
             writer << frame;

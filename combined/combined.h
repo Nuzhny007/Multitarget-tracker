@@ -78,7 +78,7 @@ private:
     int m_finishDelay = 0;
     std::vector<cv::Scalar> m_colors;
 
-	int m_minStaticTime = 5;
+	int m_minStaticTime = 10;
 
     bool OpenCapture(cv::VideoCapture& capture);
     bool WriteFrame(cv::VideoWriter& writer, const cv::Mat& frame);
