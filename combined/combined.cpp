@@ -447,7 +447,7 @@ void CombinedDetector::DrawData(cv::Mat frame, int framesCounter, int currTime)
 			{
 				DrawTrack(frame, 1, track, false);
 
-				std::string label = "abandoned " + track.m_ID.ID2Str();
+				std::string label = "abandoned " + std::to_string(cvRound(track.m_isStaticTime / m_fps)) + " s";
 				int baseLine = 0;
 				cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
 

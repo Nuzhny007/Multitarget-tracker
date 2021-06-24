@@ -491,7 +491,7 @@ objtype_t CTrack::GetCurrType() const
 ///
 TrackingObject CTrack::ConstructObject() const
 {
-    return TrackingObject(GetLastRect(), m_trackID, m_trace, IsStatic(), IsOutOfTheFrame(),
+    return TrackingObject(GetLastRect(), m_trackID, m_trace, IsStatic(), m_staticFrames, IsOutOfTheFrame(),
                           m_currType, m_lastRegion.m_confidence, m_kalman.GetVelocity());
 }
 
