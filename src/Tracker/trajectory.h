@@ -156,15 +156,15 @@ public:
         return res;
     }
 
-	///
-	/// \brief Reserve
-	/// \param capacity
-	/// \return
-	///
-	void Reserve(size_t capacity)
-	{
-		m_trace.reserve(capacity);
-	}
+    ///
+    /// \brief Reserve
+    /// \param capacity
+    /// \return
+    ///
+    void Reserve(size_t capacity)
+    {
+        m_trace.reserve(capacity);
+    }
 
 private:
     std::vector<TrajectoryPoint> m_trace;

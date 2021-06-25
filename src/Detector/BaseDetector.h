@@ -248,10 +248,8 @@ protected:
 	///
 	objtype_t T2T(size_t typeInd) const
 	{
-		if (typeInd < m_typesMap.size())
-			return m_typesMap[typeInd];
-		else
-			return bad_type;
+		objtype_t res = (typeInd < m_typesMap.size()) ? m_typesMap[typeInd] : bad_type;
+		return res;
 	}
 
 private:
