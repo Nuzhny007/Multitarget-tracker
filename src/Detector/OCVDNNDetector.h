@@ -56,7 +56,9 @@ private:
         DFINE_IS,
         YOLOV26,
         YOLOV26_OBB,
-        YOLOV26Mask
+        YOLOV26Mask,
+        YOLOE,
+        YOLOEMask
     };
 
     cv::dnn::Net m_net;
@@ -97,6 +99,8 @@ private:
     void ParseYOLOv26(const cv::Rect& crop, std::vector<cv::Mat>& detections, regions_t& tmpRegions);
     void ParseYOLOv26_obb(const cv::Rect& crop, std::vector<cv::Mat>& detections, regions_t& tmpRegions);
     void ParseYOLOv26_seg(const cv::Rect& crop, std::vector<cv::Mat>& detections, regions_t& tmpRegions);
+    void ParseYOLOE(const cv::Rect& crop, std::vector<cv::Mat>& detections, regions_t& tmpRegions);
+    void ParseYOLOEMask(const cv::Rect& crop, std::vector<cv::Mat>& detections, regions_t& tmpRegions);
 };
 
 #endif

@@ -105,6 +105,8 @@ bool ONNXTensorRTDetector::Init(const config_t& config)
 		dictNetType["YOLOV26"] = tensor_rt::YOLOV26;
 		dictNetType["YOLOV26_OBB"] = tensor_rt::YOLOV26_OBB;
 		dictNetType["YOLOV26Mask"] = tensor_rt::YOLOV26Mask;
+		dictNetType["YOLOE"] = tensor_rt::YOLOE;
+		dictNetType["YOLOEMask"] = tensor_rt::YOLOEMask;
 
 		auto netType = dictNetType.find(net_type->second);
 		if (netType != dictNetType.end())

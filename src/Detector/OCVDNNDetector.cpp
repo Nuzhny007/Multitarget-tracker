@@ -176,6 +176,8 @@ bool OCVDNNDetector::Init(const config_t& config)
         dictNetType["YOLOV26"] = ModelType::YOLOV26;
         dictNetType["YOLOV26_OBB"] = ModelType::YOLOV26_OBB;
         dictNetType["YOLOV26Mask"] = ModelType::YOLOV26Mask;
+        dictNetType["YOLOE"] = ModelType::YOLOE;
+        dictNetType["YOLOEMask"] = ModelType::YOLOEMask;
 
         auto netType = dictNetType.find(net_type->second);
         if (netType != dictNetType.end())
@@ -446,6 +448,14 @@ void OCVDNNDetector::DetectInCrop(const cv::UMat& colorFrame, const cv::Rect& cr
 
     case ModelType::YOLOV26Mask:
         ParseYOLOv26_seg(crop, detections, tmpRegions);
+        break;
+
+    case ModelType::YOLOE:
+        ParseYOLOE(crop, detections, tmpRegions);
+        break;
+
+    case ModelType::YOLOEMask:
+        ParseYOLOEMask(crop, detections, tmpRegions);
         break;
 
 	default:
@@ -1224,4 +1234,26 @@ void OCVDNNDetector::ParseYOLOv26_seg(const cv::Rect& crop, std::vector<cv::Mat>
                 tmpRegions.emplace_back(cv::Rect(left + crop.x, top + crop.y, width, height), T2T(classId), static_cast<float>(maxClassScore));
         }
     }
+}
+
+///
+/// \brief OCVDNNDetector::ParseYOLOE
+/// \param crop
+/// \param detections
+/// \param tmpRegions
+///
+void OCVDNNDetector::ParseYOLOE(const cv::Rect& crop, std::vector<cv::Mat>& detections, regions_t& tmpRegions)
+{
+    assert(0);
+}
+
+///
+/// \brief OCVDNNDetector::ParseYOLOEMask
+/// \param crop
+/// \param detections
+/// \param tmpRegions
+///
+void OCVDNNDetector::ParseYOLOEMask(const cv::Rect& crop, std::vector<cv::Mat>& detections, regions_t& tmpRegions)
+{
+    assert(0);
 }
