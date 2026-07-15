@@ -385,6 +385,14 @@ void OCVDNNDetector::DetectInCrop(const cv::UMat& colorFrame, const cv::Rect& cr
     std::vector<cv::Mat> detections;
     m_net.forward(detections, m_outNames); //compute output
 
+#if 0
+    std::cout << "Out layers:\n";
+    for (size_t i = 0; i < detections.size(); ++i)
+    {
+        std::cout << i << ": " << detections[i].size() << "\n";
+    }
+#endif
+
 	switch (m_netType)
 	{
 	case ModelType::YOLOV5:

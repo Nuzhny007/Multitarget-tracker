@@ -532,6 +532,9 @@ void VideoExample::DrawTrack(cv::Mat frame,
                              const std::string& userLabel)
 {
     cv::Scalar color = track.m_isStatic ? cv::Scalar(255, 0, 255) : cv::Scalar(0, 255, 0);
+    cv::Rect brect = track.m_rrect.boundingRect();
+
+#if 0
     cv::Point2f rectPoints[4];
     track.m_rrect.points(rectPoints);
     //std::cout << "track: rrect [" << track.m_rrect.size << " from " << track.m_rrect.center << ", " << track.m_rrect.angle << "]" << std::endl;
@@ -539,6 +542,9 @@ void VideoExample::DrawTrack(cv::Mat frame,
     {
         cv::line(frame, rectPoints[i], rectPoints[(i+1) % 4], color);
     }
+#else
+    cv::rectangle(frame, brect, color);
+#endif
 
 #if 0
 #if 0
@@ -607,7 +613,6 @@ void VideoExample::DrawTrack(cv::Mat frame,
         }
     }
 
-    cv::Rect brect = track.m_rrect.boundingRect();
     std::stringstream label;
     label << track.m_ID.ID2Str();
     if (track.m_type != bad_type)
