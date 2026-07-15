@@ -100,7 +100,7 @@ void MotionDetector::ResetModel(const cv::UMat& img, const cv::Rect& roiRect)
 /// \brief MotionDetector::CalcMotionMap
 /// \param frame
 ///
-void MotionDetector::CalcMotionMap(cv::Mat& frame)
+void MotionDetector::CalcMotionMap(cv::Mat& frame, bool /*drawOnlyMasks*/)
 {
 	if (m_motionMap.size() != frame.size())
 		m_motionMap = cv::Mat(frame.size(), CV_32FC1, cv::Scalar(0, 0, 0));

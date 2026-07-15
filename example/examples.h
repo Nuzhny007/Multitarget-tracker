@@ -543,7 +543,7 @@ protected:
 			}
 		}
 
-		//m_detector->CalcMotionMap(frame);
+		m_detector->CalcMotionMap(frame, true);
 	}
 };
 
