@@ -22,7 +22,7 @@ public:
         return true;
     }
 
-    void CalcMotionMap(cv::Mat& frame) override;
+    void CalcMotionMap(cv::Mat& frame, bool drawOnlyMasks) override;
 
     void ResetModel(const cv::UMat& img, const cv::Rect& roiRect) override;
 

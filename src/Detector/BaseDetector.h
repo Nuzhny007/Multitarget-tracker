@@ -159,7 +159,7 @@ public:
     /// \brief CalcMotionMap
     /// \param frame
     ///
-    virtual void CalcMotionMap(cv::Mat& frame)
+    virtual void CalcMotionMap(cv::Mat& frame, bool drawOnlyMasks = true)
     {
         if (m_motionMap.size() != frame.size())
             m_motionMap = cv::Mat(frame.size(), CV_32FC1, cv::Scalar(0, 0, 0));
@@ -169,7 +169,8 @@ public:
         {
             if (region.m_boxMask.empty())
             {
-                cv::ellipse(foreground, region.m_rrect, cv::Scalar(255, 255, 255), cv::FILLED);
+                if (!drawOnlyMasks)
+                    cv::ellipse(foreground, region.m_rrect, cv::Scalar(255, 255, 255), cv::FILLED);
             }
             else
             {

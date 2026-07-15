@@ -22,6 +22,8 @@
 #include "YoloONNXv26_bb.hpp"
 #include "YoloONNXv26_obb.hpp"
 #include "YoloONNXv26_instance.hpp"
+#include "YoloEONNX.hpp"
+#include "YoloEONNX_instance.hpp"
 
 namespace tensor_rt
 {
@@ -114,6 +116,12 @@ namespace tensor_rt
                 break;
             case ModelType::DFINE_IS:
                 m_detector = std::make_unique<DFINE_is_onnx>(m_params.m_inputTensorNames, m_params.m_outputTensorNames);
+                break;
+            case ModelType::YOLOE:
+                m_detector = std::make_unique<YOLOE_onnx>(m_params.m_inputTensorNames, m_params.m_outputTensorNames);
+                break;
+            case ModelType::YOLOEMask:
+                m_detector = std::make_unique<YOLOE_instance_onnx>(m_params.m_inputTensorNames, m_params.m_outputTensorNames);
                 break;
             }
 
