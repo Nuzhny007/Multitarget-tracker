@@ -18,8 +18,9 @@ T Haversine(const cv::Point_<T>& from, const cv::Point_<T>& to)
 	lat_h *= lat_h;
 	T lon_h = sin(lon_arc * static_cast<T>(0.5));
 	lon_h *= lon_h;
-	T tmp = cos(from.x * Deg2Rad) * cos(to.y * Deg2Rad);
-	return static_cast<T>(2.0) * asin(sqrt(lat_h + tmp * lon_h));
+	T tmp = cos(from.x * Deg2Rad) * cos(to.x * Deg2Rad);
+	T a = lat_h + tmp * lon_h;
+	return static_cast<T>(2.0) * atan2(sqrt(a), sqrt(static_cast<T>(1.0) - a));
 }
 
 ///
