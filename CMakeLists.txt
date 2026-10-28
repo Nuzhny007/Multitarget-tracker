@@ -51,6 +51,14 @@ else(HAVE_FILESYSTEM)
 endif(HAVE_FILESYSTEM)
 
 option(BUILD_EXAMPLES "Should compiled examples (motion detection, pedestrians, faces, DNNs etc)?" ON)
+option(BUILD_CARS_COUNTING "Should compiled Cars counting example?" OFF)
+option(USE_GEOGRAPHICLIB "Should be used GeographicLib for local cartesian (ENU) geo calculations?" OFF)
+
+if (USE_GEOGRAPHICLIB)
+    find_package(GeographicLib CONFIG REQUIRED)
+    add_definitions(-DUSE_GEOGRAPHICLIB)
+endif(USE_GEOGRAPHICLIB)
+
 if (BUILD_EXAMPLES)
     add_subdirectory(example)
 endif(BUILD_EXAMPLES)
@@ -60,11 +68,6 @@ option(USE_CLIP "Should be used RuCLIP|CLIP for objects classification?" OFF)
 if (USE_CLIP)
     add_definitions(-DUSE_CLIP)
 endif(USE_CLIP)
-
-option(BUILD_CARS_COUNTING "Should compiled Cars counting example?" OFF)
-if (BUILD_CARS_COUNTING)
-    add_definitions(-DBUILD_CARS_COUNTING)
-endif(BUILD_CARS_COUNTING)
 
 option(BUILD_ASYNC_DETECTOR "Should compiled async example with low fps Detector?" OFF)
 if (BUILD_ASYNC_DETECTOR)

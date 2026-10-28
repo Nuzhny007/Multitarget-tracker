@@ -59,9 +59,9 @@ void CarsCounting::DrawTrack(cv::Mat frame, const TrackingObject& track, bool dr
         {
             int traceSize = static_cast<int>(track.m_trace.size());
             int period = std::min(2 * cvRound(m_fps), traceSize);
-            const auto& from = m_geoParams.Pix2Geo(track.m_trace[traceSize - period]);
-            const auto& to = m_geoParams.Pix2Geo(track.m_trace[traceSize - 1]);
-            auto dist = DistanceInMeters(from, to);
+            const cv::Point2d from = m_geoParams.Pix2Ground(track.m_trace[traceSize - period]);
+            const cv::Point2d to = m_geoParams.Pix2Ground(track.m_trace[traceSize - 1]);
+            const double dist = DistanceInMeters(from, to);
 
             std::stringstream label;
             if (period >= cvRound(m_fps) / 4)
@@ -435,7 +435,9 @@ bool CarsCounting::ReadGeobindings(cv::Size frameSize)
             break;
         }
     }
+    m_logger->info("Readed {} geo poins and {} frame ppoints", geoPoints.size(), framePoints.size());
     res = m_geoParams.SetKeyPoints(framePoints, geoPoints);
+    m_logger->info("SetKeyPoints: {}", res);
 
     // Read map image
     std::string mapFile = reader.GetString("map", "file", "");
@@ -445,6 +447,7 @@ bool CarsCounting::ReadGeobindings(cv::Size frameSize)
     mapGeoCorners.emplace_back(reader.GetReal("map", "right_bottom_lat", 0), reader.GetReal("map", "right_bottom_lon", 0));
     mapGeoCorners.emplace_back(reader.GetReal("map", "left_bottom_lat", 0), reader.GetReal("map", "left_bottom_lon", 0));
     m_geoParams.SetMapParams(mapFile, mapGeoCorners);
+    m_logger->info("Readed {} map geo corners", mapGeoCorners.size());
 
     // Read lines
     m_logger->info("Read lines:");

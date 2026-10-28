@@ -1,39 +1,186 @@
 #pragma once
 
+#include <cmath>
 #include <unordered_set>
 #include "VideoExample.h"
 
-///
+#ifdef USE_GEOGRAPHICLIB
+#include <GeographicLib/Geocentric.hpp>
+#include <GeographicLib/LocalCartesian.hpp>
+#endif
+
+/// Degrees to radians
 constexpr double DEG_TO_RAD = 0.017453292519943295769236907684886;
-constexpr double EARTH_RADIUS_IN_METERS = 6372797.560856;
 
-template<typename T>
-T Haversine(const cv::Point_<T>& from, const cv::Point_<T>& to)
+/// WGS84 ellipsoid: equatorial radius (meters) and flattening
+constexpr double WGS84_A = 6378137.0;
+constexpr double WGS84_F = 1.0 / 298.257223563;
+
+///
+/// \brief The distance between the two points of the local plane in meters.
+///
+inline double DistanceInMeters(const cv::Point2d& p1, const cv::Point2d& p2)
 {
-	constexpr T Deg2Rad = static_cast<T>(DEG_TO_RAD);
-
-	T lat_arc = (from.x - to.x) * Deg2Rad;
-	T lon_arc = (from.y - to.y) * Deg2Rad;
-	T lat_h = sin(lat_arc * static_cast<T>(0.5));
-	lat_h *= lat_h;
-	T lon_h = sin(lon_arc * static_cast<T>(0.5));
-	lon_h *= lon_h;
-	T tmp = cos(from.x * Deg2Rad) * cos(to.x * Deg2Rad);
-	T a = lat_h + tmp * lon_h;
-	return static_cast<T>(2.0) * atan2(sqrt(a), sqrt(static_cast<T>(1.0) - a));
+	return cv::norm(p2 - p1);
 }
 
 ///
-template<typename T>
-T DistanceInMeters(const cv::Point_<T>& from, const cv::Point_<T>& to)
+/// \brief The LocalPlane class
+///
+/// The local ENU (East-North-Up) tangent plane in meters around the scene origin.
+/// All the geographic coordinates (latitude/longitude) are projected into this plane, so:
+///  - the perspective transform is estimated in the metric coordinates (meters) and not in
+///    degrees (no float precision problems, no anisotropic longitude scale);
+///  - the distance between the two points is a simple Euclidean distance in meters.
+///
+/// GeographicLib::LocalCartesian is used if USE_GEOGRAPHICLIB is defined, otherwise the
+/// same ENU transformation is calculated directly (WGS84 ellipsoid).
+///
+class LocalPlane
 {
-	constexpr T EarthRadius = static_cast<T>(EARTH_RADIUS_IN_METERS);
-	return EarthRadius * Haversine(from, to);
+public:
+	///
+	LocalPlane() = default;
+
+	///
+	LocalPlane(double lat0, double lon0)
+	{
+		SetOrigin(lat0, lon0);
+	}
+
+	///
+	void SetOrigin(double lat0, double lon0)
+	{
+		m_lat0 = lat0;
+		m_lon0 = lon0;
+#ifdef USE_GEOGRAPHICLIB
+		m_lc.Reset(lat0, lon0, 0.0);
+#endif
+	}
+
+	///
+	double OriginLat() const { return m_lat0; }
+
+	///
+	double OriginLon() const { return m_lon0; }
+
+	///
+	/// \brief Convert the geographic coordinates to the local plane.
+	/// \param lat - latitude (degrees)
+	/// \param lon - longitude (degrees)
+	/// \return (East, North) in meters
+	cv::Point2d ToLocal(double lat, double lon) const
+	{
+#ifdef USE_GEOGRAPHICLIB
+		double east = 0.0, north = 0.0, up = 0.0;
+		m_lc.Forward(lat, lon, 0.0, east, north, up);
+		return cv::Point2d(east, north);
+#else
+		const double e2 = WGS84_F * (2.0 - WGS84_F);
+		const double sinLat = std::sin(lat * DEG_TO_RAD), cosLat = std::cos(lat * DEG_TO_RAD);
+		const double sinLon = std::sin(lon * DEG_TO_RAD), cosLon = std::cos(lon * DEG_TO_RAD);
+		const double n = WGS84_A / std::sqrt(1.0 - e2 * sinLat * sinLat);
+		const double x = n * cosLat * cosLon;
+		const double y = n * cosLat * sinLon;
+		const double z = n * (1.0 - e2) * sinLat;
+
+		const double sinLat0 = std::sin(m_lat0 * DEG_TO_RAD), cosLat0 = std::cos(m_lat0 * DEG_TO_RAD);
+		const double sinLon0 = std::sin(m_lon0 * DEG_TO_RAD), cosLon0 = std::cos(m_lon0 * DEG_TO_RAD);
+		const double n0 = WGS84_A / std::sqrt(1.0 - e2 * sinLat0 * sinLat0);
+		const double x0 = n0 * cosLat0 * cosLon0;
+		const double y0 = n0 * cosLat0 * sinLon0;
+		const double z0 = n0 * (1.0 - e2) * sinLat0;
+
+		const double dx = x - x0, dy = y - y0, dz = z - z0;
+		const double east = -sinLon0 * dx + cosLon0 * dy;
+		const double north = -sinLat0 * cosLat0 * dx - sinLat0 * sinLon0 * dy + cosLat0 * dz;
+		return cv::Point2d(east, north);
+#endif
+	}
+
+	///
+	/// \brief Convert the local plane coordinates back to the geographic ones.
+	/// \param east - East (meters)
+	/// \param north - North (meters)
+	/// \param[out] lat - latitude (degrees)
+	/// \param[out] lon - longitude (degrees)
+	void ToGeo(double east, double north, double& lat, double& lon) const
+	{
+#ifdef USE_GEOGRAPHICLIB
+		double up = 0.0;
+		m_lc.Reverse(east, north, up, lat, lon, up);
+#else
+		const double e2 = WGS84_F * (2.0 - WGS84_F);
+		const double sinLat0 = std::sin(m_lat0 * DEG_TO_RAD), cosLat0 = std::cos(m_lat0 * DEG_TO_RAD);
+		const double sinLon0 = std::sin(m_lon0 * DEG_TO_RAD), cosLon0 = std::cos(m_lon0 * DEG_TO_RAD);
+		const double n0 = WGS84_A / std::sqrt(1.0 - e2 * sinLat0 * sinLat0);
+		const double x0 = n0 * cosLat0 * cosLon0;
+		const double y0 = n0 * cosLat0 * sinLon0;
+		const double z0 = n0 * (1.0 - e2) * sinLat0;
+
+		const double dx = -sinLon0 * east - sinLat0 * cosLat0 * north;
+		const double dy =  cosLon0 * east - sinLat0 * sinLon0 * north;
+		const double dz =  cosLat0 * north;
+
+		const double x = x0 + dx, y = y0 + dy, z = z0 + dz;
+		const double p = std::sqrt(x * x + y * y);
+		const double theta = std::atan2(z * WGS84_A, p * WGS84_A * std::sqrt(1.0 - e2));
+		const double sinTheta = std::sin(theta), cosTheta = std::cos(theta);
+		lat = std::atan2(z + WGS84_A * e2 * sinTheta * sinTheta * sinTheta,
+						 p - WGS84_A * e2 * cosTheta * cosTheta * cosTheta) / DEG_TO_RAD;
+		lon = std::atan2(y, x) / DEG_TO_RAD;
+#endif
+	}
+
+	///
+	/// \brief The distance between the two geographic points in meters.
+	double DistanceInMeters(double lat1, double lon1, double lat2, double lon2) const
+	{
+		return ::DistanceInMeters(ToLocal(lat1, lon1), ToLocal(lat2, lon2));
+	}
+
+private:
+	double m_lat0 = 0.0;
+	double m_lon0 = 0.0;
+#ifdef USE_GEOGRAPHICLIB
+	GeographicLib::LocalCartesian m_lc;
+#endif
+};
+
+///
+/// \brief Normalize the points (Hartley normalization): shift them to the centroid and
+///        scale them so that the mean distance to the centroid is sqrt(2).
+///
+inline void NormalizePoints(const std::vector<cv::Point2d>& pts, std::vector<cv::Point2d>& normPts, cv::Matx<double, 3, 3>& T)
+{
+	cv::Point2d mean(0.0, 0.0);
+	for (const auto& p : pts)
+		mean += p;
+	mean *= 1.0 / static_cast<double>(pts.size());
+
+	double meanDist = 0.0;
+	for (const auto& p : pts)
+		meanDist += cv::norm(p - mean);
+	meanDist /= static_cast<double>(pts.size());
+
+	const double scale = (meanDist > 1e-12) ? std::sqrt(2.0) / meanDist : 1.0;
+
+	T = cv::Matx<double, 3, 3>(scale, 0.0, -scale * mean.x,
+							   0.0, scale, -scale * mean.y,
+							   0.0, 0.0, 1.0);
+
+	normPts.resize(pts.size());
+	for (size_t i = 0; i < pts.size(); ++i)
+	{
+		normPts[i] = cv::Point2d((pts[i].x - mean.x) * scale, (pts[i].y - mean.y) * scale);
+	}
 }
 
+#if 0
+// Prev version - copy from OpenCV
 // Fix cv::getPerspectiveTransform for double
 template<class T>
-cv::Mat GetPerspectiveTransform(const std::vector<cv::Point_<T>>& src, const std::vector<cv::Point_<T>>& dst, int solveMethod)
+cv::Mat GetPerspectiveTransform(const std::vector<cv::Point_<T>>& src, const std::vector<cv::Point_<T>>& dst, int solveMethod = (int)cv::DECOMP_LU)
 {
     cv::Mat M(3, 3, CV_64F), X(8, 1, CV_64F, M.ptr());
     double a[8][8], b[8];
@@ -58,6 +205,96 @@ cv::Mat GetPerspectiveTransform(const std::vector<cv::Point_<T>>& src, const std
 
     return M;
 }
+#else
+///
+/// \brief Estimate the perspective transform (homography) from the point correspondences.
+///
+/// The estimation is performed in double precision (float is not enough to represent the
+/// geographic coordinates and to keep the matrix well conditioned) and uses all the given
+/// points (not only the first 4 ones).
+///
+/// \param src - source points
+/// \param dst - destination points
+/// \return 3x3 homography matrix (CV_64F) or an empty matrix if the estimation failed
+///
+inline cv::Mat GetPerspectiveTransform(const std::vector<cv::Point2d>& src, const std::vector<cv::Point2d>& dst)
+{
+    const size_t count = std::min(src.size(), dst.size());
+    if (count < 4)
+    {
+        std::cerr << "GetPerspectiveTransform: points less than 4: " << count << std::endl;
+        return cv::Mat();
+    }
+
+    // Hartley normalization
+    std::vector<cv::Point2d> nsrc, ndst;
+    cv::Matx<double, 3, 3> Tsrc, Tdst;
+    NormalizePoints(src, nsrc, Tsrc);
+    NormalizePoints(dst, ndst, Tdst);
+
+    // The direct linear transform system
+    cv::Mat A(static_cast<int>(2 * count), 9, CV_64F);
+    for (size_t i = 0; i < count; ++i)
+    {
+        const double x = nsrc[i].x, y = nsrc[i].y;
+        const double u = ndst[i].x, v = ndst[i].y;
+        double* r0 = A.ptr<double>(static_cast<int>(2 * i));
+        double* r1 = A.ptr<double>(static_cast<int>(2 * i + 1));
+        // u * (h6 * x + h7 * y + h8) = h0 * x + h1 * y + h2
+        r0[0] = x; r0[1] = y; r0[2] = 1.0;
+        r0[3] = 0.0; r0[4] = 0.0; r0[5] = 0.0;
+        r0[6] = -u * x; r0[7] = -u * y; r0[8] = -u;
+        // v * (h6 * x + h7 * y + h8) = h3 * x + h4 * y + h5
+        r1[0] = 0.0; r1[1] = 0.0; r1[2] = 0.0;
+        r1[3] = x; r1[4] = y; r1[5] = 1.0;
+        r1[6] = -v * x; r1[7] = -v * y; r1[8] = -v;
+    }
+
+    // The null vector of the system is the right singular vector with the smallest singular value
+    cv::Mat w, vh;
+    cv::SVD::compute(A, w, cv::noArray(), vh, cv::SVD::FULL_UV);
+    if (vh.rows < 9 || vh.cols < 9)
+    {
+        std::cerr << "GetPerspectiveTransform: cv::SVD::compute vh size less than 9: " << vh.size() << std::endl;
+        return cv::Mat();
+    }
+
+	cv::Mat Hn(3, 3, CV_64F);
+	const cv::Mat h = vh.row(vh.rows - 1).reshape(1, 9);
+	for (int i = 0; i < 9; ++i)
+		Hn.at<double>(i / 3, i % 3) = h.at<double>(i);
+
+	// Undo the normalization: H = Tdst^-1 * Hn * Tsrc
+	const cv::Matx<double, 3, 3> TdstInv( 1.0 / Tdst(0, 0), 0.0, -Tdst(0, 2) / Tdst(0, 0),
+										   0.0, 1.0 / Tdst(1, 1), -Tdst(1, 2) / Tdst(1, 1),
+										   0.0, 0.0, 1.0);
+	cv::Mat H = cv::Mat(TdstInv) * Hn * cv::Mat(Tsrc);
+
+	const double h33 = H.at<double>(2, 2);
+	if (std::abs(h33) < 1e-12)
+    {
+        std::cerr << "GetPerspectiveTransform: std::abs(h33) < 1e-12: " << std::abs(h33) << std::endl;
+        return cv::Mat();
+    }
+    H /= h33;
+
+	return H;
+}
+#endif
+
+///
+/// \brief Convert the 3x3 matrix to the fixed size one.
+///
+inline cv::Matx<double, 3, 3> ToMatx(const cv::Mat& m)
+{
+	cv::Matx<double, 3, 3> res;
+	for (int r = 0; r < 3; ++r)
+	{
+		for (int c = 0; c < 3; ++c)
+			res(r, c) = m.at<double>(r, c);
+	}
+	return res;
+}
 
 ///
 /// \brief The GeoParams class
@@ -80,63 +317,101 @@ public:
 	{
 		m_framePoints = framePoints;
 		m_geoPoints = geoPoints;
+		m_groundPoints.clear();
 
-		assert(m_framePoints.size() == m_geoPoints.size());
-		assert(m_framePoints.size() >= 4);
-
-		bool res = true;
-
-		std::vector<cv::Point_<T>> tmpPix;
-		tmpPix.reserve(m_framePoints.size());
-		for (const auto& pix : m_framePoints)
+		if (m_framePoints.size() != m_geoPoints.size() || m_framePoints.size() < 4)
 		{
-			tmpPix.emplace_back(static_cast<T>(pix.x), static_cast<T>(pix.y));
+			m_valid = false;
+			return false;
 		}
-#if 0
-		std::cout << "Coords pairs: ";
+
+		// The origin of the local plane is the center of the bound points
+		double lat0 = 0.0, lon0 = 0.0;
+		for (const auto& p : m_geoPoints)
+		{
+			lat0 += static_cast<double>(p.x);
+			lon0 += static_cast<double>(p.y);
+		}
+		lat0 /= static_cast<double>(m_geoPoints.size());
+		lon0 /= static_cast<double>(m_geoPoints.size());
+		m_plane.SetOrigin(lat0, lon0);
+
+		// Convert the geographic coordinates to the metric local plane (meters)
+		std::vector<cv::Point2d> tmpPix, tmpGround;
+		tmpPix.reserve(m_framePoints.size());
+		tmpGround.reserve(m_geoPoints.size());
+		m_groundPoints.reserve(m_geoPoints.size());
+		for (size_t i = 0; i < m_framePoints.size(); ++i)
+		{
+			tmpPix.emplace_back(static_cast<double>(m_framePoints[i].x), static_cast<double>(m_framePoints[i].y));
+			const cv::Point2d ground = m_plane.ToLocal(static_cast<double>(m_geoPoints[i].x), static_cast<double>(m_geoPoints[i].y));
+			tmpGround.push_back(ground);
+			m_groundPoints.emplace_back(static_cast<T>(ground.x), static_cast<T>(ground.y));
+		}
+#if 1
+		std::cout << "SetKeyPoints: Coords pairs: ";
 		for (size_t i = 0; i < tmpPix.size(); ++i)
 		{
-			std::cout << tmpPix[i] << " - " << m_geoPoints[i] << "; ";
+			std::cout << tmpPix[i] << " - " << m_groundPoints[i] << "; ";
 		}
 		std::cout << std::endl;
 #endif
-		cv::Mat toGeo = GetPerspectiveTransform(tmpPix, m_geoPoints, (int)cv::DECOMP_LU);
-		cv::Mat toPix = GetPerspectiveTransform(m_geoPoints, tmpPix, (int)cv::DECOMP_LU);
-		m_toGeo = toGeo;
-		m_toPix = toPix;
-		//std::cout << "To Geo: " << m_toGeo << std::endl;
-		//std::cout << "To Pix: " << m_toPix << std::endl;
 
-		return res;
+		// The perspective transforms are estimated in the metric coordinates (meters)
+		const cv::Mat toGround = GetPerspectiveTransform(tmpPix, tmpGround);
+		const cv::Mat toPix = GetPerspectiveTransform(tmpGround, tmpPix);
+		if (toGround.empty() || toPix.empty())
+		{
+			std::cerr << "SetKeyPoints: toGround = " << toGround << ", toPix = " << toPix << std::endl;
+			m_valid = false;
+			return false;
+		}
+		m_toGround = ToMatx(toGround);
+		m_toPix = ToMatx(toPix);
+		std::cout << "To Ground: " << m_toGround << std::endl;
+		std::cout << "To Pix: " << m_toPix << std::endl;
+
+		m_valid = true;
+
+		return true;
 	}
 
     ///
     bool SetMapParams(const std::string& mapfile, const std::vector<cv::Point_<T>>& mapGeoCorners)
     {
+        if (!m_valid)
+            return false;
+
         m_map = cv::imread(mapfile);
         m_mapGeoCorners.assign(std::begin(mapGeoCorners), std::end(mapGeoCorners));
 
         if (!m_map.empty())
-            m_p2mParams.Init(m_mapGeoCorners, m_map.cols, m_map.rows);
+            m_p2mParams.Init(m_mapGeoCorners, m_map.cols, m_map.rows, m_plane);
 
         return !m_map.empty();
     }
 
 	///
-	cv::Point Geo2Pix(const cv::Point_<T>& geo) const
+	/// \brief Convert the local plane coordinates (East, North) to the frame pixels.
+	cv::Point Ground2Pix(const cv::Point2d& ground) const
 	{
-		cv::Vec<T, 3> g(geo.x, geo.y, 1);
-		auto p = m_toPix * g;
+		cv::Vec<double, 3> g(ground.x, ground.y, 1.0);
+		const cv::Vec<double, 3> p = m_toPix * g;
 		return cv::Point(cvRound(p[0] / p[2]), cvRound(p[1] / p[2]));
 	}
 
 	///
-	cv::Point_<T> Pix2Geo(const cv::Point& pix) const
+	/// \brief Convert the frame pixels to the local plane coordinates (East, North) in meters.
+	cv::Point2d Pix2Ground(const cv::Point& pix) const
 	{
-		cv::Vec<T, 3> p(static_cast<T>(pix.x), static_cast<T>(pix.y), 1);
-		auto g = m_toGeo * p;
-		return cv::Point_<T>(g[0] / g[2], g[1] / g[2]);
+		cv::Vec<double, 3> p(static_cast<double>(pix.x), static_cast<double>(pix.y), 1.0);
+		const cv::Vec<double, 3> g = m_toGround * p;
+		return cv::Point2d(g[0] / g[2], g[1] / g[2]);
 	}
+
+	///
+	/// \brief The local plane (metric coordinates) of the bound points.
+	const LocalPlane& Plane() const { return m_plane; }
 
 	///
 	std::vector<cv::Point> GetFramePoints() const
@@ -147,7 +422,7 @@ public:
 	///
 	bool Empty() const
 	{
-		return m_framePoints.size() != m_geoPoints.size() || m_framePoints.size() < 4;
+		return !m_valid;
 	}
 
     ///
@@ -162,11 +437,11 @@ public:
         // Draw bindings points
         for (size_t i = 0; i < m_geoPoints.size(); ++i)
         {
-            cv::Point_<T> gp1(m_geoPoints[i % m_geoPoints.size()]);
-            cv::Point p1(m_p2mParams.Geo2Pix(gp1));
+            const cv::Point_<T>& g1 = m_groundPoints[i % m_groundPoints.size()];
+            const cv::Point p1 = m_p2mParams.Ground2Pix(cv::Point2d(g1.x, g1.y));
 
-            cv::Point_<T> gp2(m_geoPoints[(i + 1) % m_geoPoints.size()]);
-            cv::Point p2(m_p2mParams.Geo2Pix(gp2));
+            const cv::Point_<T>& g2 = m_groundPoints[(i + 1) % m_groundPoints.size()];
+            const cv::Point p2 = m_p2mParams.Ground2Pix(cv::Point2d(g2.x, g2.y));
 
             cv::line(map, p1, p2, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
 
@@ -186,9 +461,9 @@ public:
         {
             if (track.m_lastRobust)
             {
-                auto geoCenter = Pix2Geo(track.m_rrect.center);
-                auto center = m_p2mParams.Geo2Pix(geoCenter);
-                //std::cout << "Convert: " << track.m_rrect.center << " -> " << geoCenter << " -> " << center << std::endl;
+                const cv::Point2d ground = Pix2Ground(track.m_rrect.center);
+                const cv::Point center = m_p2mParams.Ground2Pix(ground);
+                //std::cout << "Convert: " << track.m_rrect.center << " -> " << ground << " -> " << center << std::endl;
                 if (center.x > 0 && center.x < map.cols && center.y > 0 && center.y < map.rows)
                     cv::ellipse(map, center, cv::Size(5, 5), 0, 0, 360, cv::Scalar(255, 0, 255), cv::FILLED, 8);
             }
@@ -199,10 +474,15 @@ public:
 
 private:
 	std::vector<cv::Point> m_framePoints;
-	std::vector<cv::Point_<T>> m_geoPoints;
+	std::vector<cv::Point_<T>> m_geoPoints;       // Geographic coordinates: x = lat, y = lon
+	std::vector<cv::Point_<T>> m_groundPoints;    // Local plane coordinates (meters): x = East, y = North
 
-	cv::Matx<T, 3, 3> m_toGeo;
-	cv::Matx<T, 3, 3> m_toPix;
+	LocalPlane m_plane;
+
+	cv::Matx<double, 3, 3> m_toGround;   // Frame pixels -> local plane (meters)
+	cv::Matx<double, 3, 3> m_toPix;      // Local plane (meters) -> frame pixels
+
+	bool m_valid = false;
 
     cv::Mat m_map;
     std::vector<cv::Point_<T>> m_mapGeoCorners;
@@ -210,22 +490,31 @@ private:
     ///
     struct Pix2MapParams
     {
-        cv::Matx<T, 3, 3> m_toPix;
+        cv::Matx<double, 3, 3> m_toPix;
 
         ///
-        cv::Point Geo2Pix(const cv::Point_<T>& geo) const
+        cv::Point Ground2Pix(const cv::Point2d& ground) const
         {
-            cv::Vec<T, 3> g(geo.x, geo.y, 1);
-            auto p = m_toPix * g;
+            cv::Vec<double, 3> g(ground.x, ground.y, 1.0);
+            const cv::Vec<double, 3> p = m_toPix * g;
             return cv::Point(cvRound(p[0] / p[2]), cvRound(p[1] / p[2]));
         }
 
         ///
-        void Init(const std::vector<cv::Point_<T>>& geoCorners, int mapWidth, int mapHeight)
+        void Init(const std::vector<cv::Point_<T>>& geoCorners, int mapWidth, int mapHeight, const LocalPlane& plane)
         {
-            std::vector<cv::Point_<T>> frameCorners { cv::Point_<T>(0, 0), cv::Point_<T>(mapWidth, 0), cv::Point_<T>(mapWidth, mapHeight), cv::Point_<T>(0, mapHeight) };
-            cv::Mat toPix = GetPerspectiveTransform(geoCorners, frameCorners, (int)cv::DECOMP_LU);
-            m_toPix = toPix;
+            std::vector<cv::Point2d> groundCorners;
+            groundCorners.reserve(geoCorners.size());
+            for (const auto& c : geoCorners)
+            {
+                const cv::Point2d g = plane.ToLocal(static_cast<double>(c.x), static_cast<double>(c.y));
+                groundCorners.push_back(g);
+            }
+            const std::vector<cv::Point2d> frameCorners { cv::Point2d(0.0, 0.0), cv::Point2d(static_cast<double>(mapWidth), 0.0),
+                                                          cv::Point2d(static_cast<double>(mapWidth), static_cast<double>(mapHeight)), cv::Point2d(0.0, static_cast<double>(mapHeight)) };
+            const cv::Mat toPix = GetPerspectiveTransform(groundCorners, frameCorners);
+            if (!toPix.empty())
+                m_toPix = ToMatx(toPix);
         }
     };
     Pix2MapParams m_p2mParams;
