@@ -441,13 +441,15 @@ bool CarsCounting::ReadGeobindings(cv::Size frameSize)
 
     // Read map image
     std::string mapFile = reader.GetString("map", "file", "");
+    std::filesystem::path dirPath = std::filesystem::path(m_geoBindFile).parent_path();
+    mapFile = (dirPath / std::filesystem::path(mapFile)).string();
     std::vector<cv::Point2d> mapGeoCorners;
     mapGeoCorners.emplace_back(reader.GetReal("map", "left_top_lat", 0), reader.GetReal("map", "left_top_lon", 0));
     mapGeoCorners.emplace_back(reader.GetReal("map", "right_top_lat", 0), reader.GetReal("map", "right_top_lon", 0));
     mapGeoCorners.emplace_back(reader.GetReal("map", "right_bottom_lat", 0), reader.GetReal("map", "right_bottom_lon", 0));
     mapGeoCorners.emplace_back(reader.GetReal("map", "left_bottom_lat", 0), reader.GetReal("map", "left_bottom_lon", 0));
-    m_geoParams.SetMapParams(mapFile, mapGeoCorners);
-    m_logger->info("Readed {} map geo corners", mapGeoCorners.size());
+    bool mapReaded = m_geoParams.SetMapParams(mapFile, mapGeoCorners);
+    m_logger->info("Readed {} map geo corners, map image ({}) readed = {}", mapGeoCorners.size(), mapFile, mapReaded);
 
     // Read lines
     m_logger->info("Read lines:");
