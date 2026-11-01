@@ -154,6 +154,20 @@ public:
     track_t m_confidence = -1;
     cv::Mat m_boxMask;
 
+    ///
+    /// \brief Local plane (ENU) coordinates of the region center in meters.
+    /// x = East, y = North. Filled by the application (not by the detector).
+    ///
+    cv::Point2d m_localCartesian{ 0.0, 0.0 };
+    bool m_hasLocalCartesian = false;
+
+    ///
+    void SetLocalCartesian(const cv::Point2d& pt)
+    {
+        m_localCartesian = pt;
+        m_hasLocalCartesian = true;
+    }
+
 private:
     ///
     /// \brief R2BRect
@@ -410,6 +424,7 @@ enum DistType
     DistHist,        // Bhatacharia distance between histograms, [0, 1]
     DistFeatureCos,  // Cosine distance between embeddings, [0, 1]
     DistMahalanobis, // Mahalanobis: https://ww2.mathworks.cn/help/vision/ug/motion-based-multiple-object-tracking.html
+    DistLocalCartesian, // Euclidean distance in the local ENU plane, meters
     DistsCount
 };
 

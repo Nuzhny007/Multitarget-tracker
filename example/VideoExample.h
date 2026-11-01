@@ -259,7 +259,7 @@ protected:
     virtual bool InitDetector(cv::UMat frame) = 0;
     virtual bool InitTracker(cv::UMat frame) = 0;
 
-    void Detection(FrameInfo& frame);
+    virtual void Detection(FrameInfo& frame);
     void Tracking(FrameInfo& frame);
 
     virtual void DrawData(cv::Mat frame, const std::vector<TrackingObject>& tracks, int framesCounter, int currTime) = 0;

@@ -22,6 +22,11 @@ public:
     virtual ~BaseTracker(void) = default;
 
     virtual void Update(const regions_t& regions, cv::UMat currFrame, time_point_t frameTime) = 0;
+    virtual void Update(const regions_t& regions, cv::UMat currFrame, time_point_t frameTime, tracking::DistType distType)
+    {
+        (void)distType;
+        Update(regions, currFrame, frameTime);
+    }
     virtual void UpdateMat(const regions_t& regions, cv::Mat currFrame, time_point_t frameTime)
     {
         cv::UMat frame = currFrame.getUMat(cv::ACCESS_READ);

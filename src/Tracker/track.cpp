@@ -1,5 +1,8 @@
 #include "track.h"
 
+#include <chrono>
+#include <cmath>
+
 #include "Circular_Code/CircVal.h"
 #include "Circular_Code/CircStat.h"
 
@@ -51,6 +54,7 @@ CTrack::CTrack(const CRegion& region,
 
     Point_t pt(m_predictionPoint.x, m_predictionPoint.y + region.m_brect.height / 2);
     m_trace.push_back(pt, pt, currTime);
+    AddMetricPoint(region, currTime);
     ResetLostTime(currTime);
 }
 
@@ -104,6 +108,7 @@ CTrack::CTrack(const CRegion& region,
 		break;
 	};
     m_trace.push_back(m_predictionPoint, m_predictionPoint, currTime);
+    AddMetricPoint(region, currTime);
 }
 
 ///
@@ -156,6 +161,19 @@ track_t CTrack::CalcDistJaccard(const CRegion& reg) const
     track_t unionArea = static_cast<track_t>(reg.m_brect.area() + m_lastRegion.m_brect.area() - intArea + 1e-6);
 
     return std::fabs(1 - intArea / unionArea);
+}
+
+///
+/// \brief CTrack::CalcDistLocalCartesian
+/// \param reg
+/// \return distance in meters or -1 if local coordinates are not available
+///
+track_t CTrack::CalcDistLocalCartesian(const CRegion& reg) const
+{
+    if (!m_lastRegion.m_hasLocalCartesian || !reg.m_hasLocalCartesian)
+        return static_cast<track_t>(-1);
+
+    return static_cast<track_t>(cv::norm(reg.m_localCartesian - m_lastRegion.m_localCartesian));
 }
 
 ///
@@ -302,6 +320,7 @@ void CTrack::Update(const CRegion& region,
         //std::cout << m_lastRegion.m_brect << " - " << region.m_brect << std::endl;
 
         m_lastRegion = region;
+        AddMetricPoint(region, currTime);
         m_trace.push_back(m_predictionPoint, region.m_rrect.center, currTime);
 
         CheckStatic(trajLen, currFrame, region, maxSpeedForStatic, currTime);
@@ -360,6 +379,7 @@ void CTrack::Update(const CRegion& region,
         //std::cout << m_lastRegion.m_brect << " - " << region.m_brect << std::endl;
 
         m_lastRegion = region;
+        AddMetricPoint(region, currTime);
         m_trace.push_back(m_predictionPoint, m_lastRegion.m_rrect.center, currTime);
 
         CheckStatic(trajLen, currFrame, region, maxSpeedForStatic, currTime);
@@ -596,8 +616,10 @@ objtype_t CTrack::GetCurrType() const
 TrackingObject CTrack::ConstructObject(time_point_t frameTime) const
 {
     std::chrono::duration<double> period = frameTime - m_staticStartTime;
-    return TrackingObject(GetLastRect(), m_trackID, m_trace, IsStatic(), cvRound(period.count()), IsOutOfTheFrame(),
+    TrackingObject object(GetLastRect(), m_trackID, m_trace, IsStatic(), cvRound(period.count()), IsOutOfTheFrame(),
                           m_currType, m_lastRegion.m_confidence, m_kalman.GetVelocity());
+    object.m_speedMps = CalcSpeedMps(frameTime);
+    return object;
 }
 
 ///
@@ -626,6 +648,97 @@ double CTrack::GetLostPeriod(time_point_t currTime) const
 void CTrack::ResetLostTime(time_point_t currTime)
 {
     m_lastDetectionTime = currTime;
+}
+
+///
+/// \brief CTrack::AddMetricPoint
+/// Store the local ENU position of the detection for the speed estimation.
+/// Only correct detections are stored, so the prediction of a lost track
+/// cannot affect the speed.
+/// \param region
+/// \param currTime
+///
+void CTrack::AddMetricPoint(const CRegion& region, time_point_t currTime)
+{
+    if (!region.m_hasLocalCartesian)
+        return;
+
+    TrimMetricTrace(currTime);
+
+    m_metricTrace.push_back({ region.m_localCartesian, currTime });
+}
+
+///
+/// \brief CTrack::TrimMetricTrace
+/// \param currTime
+///
+void CTrack::TrimMetricTrace(time_point_t currTime)
+{
+    while (!m_metricTrace.empty())
+    {
+        std::chrono::duration<double> period = currTime - m_metricTrace.front().m_time;
+        if (period.count() > m_speedWindowSeconds)
+            m_metricTrace.pop_front();
+        else
+            break;
+    }
+}
+
+///
+/// \brief CTrack::CalcSpeedMps
+/// Least-squares fit of x(t) and y(t) over the recent metric positions.
+/// \param currTime
+/// \return speed in m/s or -1 if there is not enough recent data
+///
+double CTrack::CalcSpeedMps(time_point_t currTime) const
+{
+    if (m_metricTrace.size() < m_minSpeedPoints)
+        return -1.0;
+
+    std::chrono::duration<double> age = currTime - m_metricTrace.back().m_time;
+    if (age.count() > m_speedTimeoutSeconds)
+        return -1.0;
+
+    const time_point_t& firstTime = m_metricTrace.front().m_time;
+    const double period = std::chrono::duration<double>(m_metricTrace.back().m_time - firstTime).count();
+    if (period < m_minSpeedPeriodSeconds)
+        return -1.0;
+
+    double sumTime = 0.0;
+    double sumX = 0.0;
+    double sumY = 0.0;
+
+    for (const auto& point : m_metricTrace)
+    {
+        sumTime += std::chrono::duration<double>(point.m_time - firstTime).count();
+        sumX += point.m_position.x;
+        sumY += point.m_position.y;
+    }
+
+    const double count = static_cast<double>(m_metricTrace.size());
+    const double meanTime = sumTime / count;
+    const double meanX = sumX / count;
+    const double meanY = sumY / count;
+
+    double timeVariance = 0.0;
+    double timeX = 0.0;
+    double timeY = 0.0;
+
+    for (const auto& point : m_metricTrace)
+    {
+        const double t = std::chrono::duration<double>(point.m_time - firstTime).count();
+        const double dt = t - meanTime;
+        timeVariance += dt * dt;
+        timeX += dt * (point.m_position.x - meanX);
+        timeY += dt * (point.m_position.y - meanY);
+    }
+
+    if (timeVariance < 1e-9)
+        return -1.0;
+
+    const double vx = timeX / timeVariance;
+    const double vy = timeY / timeVariance;
+    return std::sqrt(vx * vx + vy * vy);
 }
 
 ///
