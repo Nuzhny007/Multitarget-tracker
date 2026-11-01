@@ -49,6 +49,13 @@ struct TrackerSettings
     track_t m_distThres = 0.8f;
 
     ///
+    /// \brief m_distThresLocalCartesian
+    /// Distance threshold for Assignment problem in the local ENU plane, meters.
+    /// Used only when tracking::DistLocalCartesian is selected.
+    ///
+    track_t m_distThresLocalCartesian = 10.0f;
+
+    ///
     /// \brief m_minAreaRadius
     /// Minimal area radius in pixels for objects centers
     ///
@@ -228,6 +235,7 @@ struct TrackerSettings
 		m_distType[tracking::DistHist] = static_cast<track_t>(0.5);
 		m_distType[tracking::DistFeatureCos] = static_cast<track_t>(0.0);
 		m_distType[tracking::DistMahalanobis] = static_cast<track_t>(0.0);
+		m_distType[tracking::DistLocalCartesian] = static_cast<track_t>(0.0);
 
 		assert(CheckDistance());
 	}

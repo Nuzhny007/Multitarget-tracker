@@ -50,6 +50,7 @@ bool ParseTrackerSettings(const std::string& settingsFile, TrackerSettings& trac
         trackerSettings.m_dt = static_cast<track_t>(reader.GetReal("tracking", "delta_time", 0.4));  // Delta time for Kalman filter
         trackerSettings.m_accelNoiseMag = static_cast<track_t>(reader.GetReal("tracking", "accel_noise", 0.2)); // Accel noise magnitude for Kalman filter
         trackerSettings.m_distThres = static_cast<track_t>(reader.GetReal("tracking", "dist_thresh", 0.8));     // Distance threshold between region and object on two frames
+        trackerSettings.m_distThresLocalCartesian = static_cast<track_t>(reader.GetReal("tracking", "local_cartesian_dist_thresh", 10.0)); // Same threshold in meters for DistLocalCartesian
         trackerSettings.m_minAreaRadiusPix = static_cast<track_t>(reader.GetReal("tracking", "min_area_radius_pix", -1.));
         trackerSettings.m_minAreaRadiusK = static_cast<track_t>(reader.GetReal("tracking", "min_area_radius_k", 0.8));
         trackerSettings.m_maximumAllowedLostTime = reader.GetReal("tracking", "max_lost_time", 1.);         // Maximum lost time in seconds

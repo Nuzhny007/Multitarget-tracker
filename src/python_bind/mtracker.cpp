@@ -340,7 +340,8 @@ PYBIND11_MODULE(pymtracking, m)
             .def_readwrite("outOfTheFrame", &TrackingObject::m_outOfTheFrame)
             .def_readwrite("type", &TrackingObject::m_type)
             .def_readwrite("confidence", &TrackingObject::m_confidence)
-            .def_readwrite("velocity", &TrackingObject::m_velocity);
+            .def_readwrite("velocity", &TrackingObject::m_velocity)
+            .def_readwrite("speedMps", &TrackingObject::m_speedMps);
 
     py::class_<BaseTracker, PyBaseTracker> mtracker(m, "MTracker");
     mtracker.def(py::init(&BaseTracker::CreateTracker));
@@ -351,6 +352,7 @@ PYBIND11_MODULE(pymtracking, m)
             .value("DistCenters", tracking::DistType::DistCenters)
             .value("DistRects", tracking::DistType::DistRects)
             .value("DistJaccard", tracking::DistType::DistJaccard)
+            .value("DistLocalCartesian", tracking::DistType::DistLocalCartesian)
             .export_values();
 
     py::enum_<tracking::FilterGoal>(mtracker, "FilterGoal")

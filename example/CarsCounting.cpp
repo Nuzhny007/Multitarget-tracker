@@ -1,5 +1,37 @@
 #include "CarsCounting.h"
 #include <inih/INIReader.h>
+#include <limits>
+
+namespace
+{
+///
+/// \brief BottomCenter
+/// Midpoint of the lowest edge of the rotated rectangle. Used as an
+/// approximation of the vehicle ground contact point for the road plane.
+///
+cv::Point2f BottomCenter(const cv::RotatedRect& rrect)
+{
+    cv::Point2f pts[4];
+    rrect.points(pts);
+
+    float bestY = std::numeric_limits<float>::lowest();
+    cv::Point2f result = rrect.center;
+
+    for (int i = 0; i < 4; ++i)
+    {
+        const cv::Point2f& p1 = pts[i];
+        const cv::Point2f& p2 = pts[(i + 1) % 4];
+        const cv::Point2f mid((p1.x + p2.x) * 0.5f, (p1.y + p2.y) * 0.5f);
+        if (mid.y > bestY)
+        {
+            bestY = mid.y;
+            result = mid;
+        }
+    }
+
+    return result;
+}
+}
 
 ///
 /// \brief CarsCounting::CarsCounting
@@ -23,6 +55,36 @@ CarsCounting::CarsCounting(const cv::CommandLineParser& parser)
         m_trackerSettingsLoaded, settingsFile, m_trackerSettings.m_detectorBackend, m_trackerSettings.m_nnWeights, m_trackerSettings.m_nnConfig, m_trackerSettings.m_classNames);
 
     m_geoBindFile = parser.get<std::string>("geo_bind");
+}
+
+///
+/// \brief CarsCounting::Detection
+/// \param frame
+///
+void CarsCounting::Detection(FrameInfo& frame)
+{
+    VideoExample::Detection(frame);
+
+    if (!m_geoBindingsRead && !frame.m_frames.empty())
+    {
+        ReadGeobindings(frame.m_frames.front().GetMatBGR().size());
+        m_geoBindingsRead = true;
+    }
+
+    if (m_geoParams.Empty())
+        return;
+
+    // Fill the local ENU coordinates for every detection. The tracker uses them
+    // when tracking::DistLocalCartesian is selected.
+    for (auto& regions : frame.m_regions)
+    {
+        for (auto& reg : regions)
+        {
+            const cv::Point2f bottomCenter = BottomCenter(reg.m_rrect);
+            const cv::Point groundPoint(cvRound(bottomCenter.x), cvRound(bottomCenter.y));
+            reg.SetLocalCartesian(m_geoParams.Pix2Ground(groundPoint));
+        }
+    }
 }
 
 ///
@@ -55,54 +117,44 @@ void CarsCounting::DrawTrack(cv::Mat frame, const TrackingObject& track, bool dr
         cv::rectangle(frame, brect, cv::Scalar(0, 255, 0), 1, CV_AA);
 #endif
 
-        if (!m_geoParams.Empty())
+        if (!m_geoParams.Empty() && track.m_speedMps >= 0.0)
         {
-            int traceSize = static_cast<int>(track.m_trace.size());
-            int period = std::min(2 * cvRound(m_fps), traceSize);
-            const cv::Point2d from = m_geoParams.Pix2Ground(track.m_trace[traceSize - period]);
-            const cv::Point2d to = m_geoParams.Pix2Ground(track.m_trace[traceSize - 1]);
-            const double dist = DistanceInMeters(from, to);
+            double velocity = 3.6 * track.m_speedMps;
+            if (velocity < 1.0 || std::isnan(velocity))
+                velocity = 0;
 
             std::stringstream label;
-            if (period >= cvRound(m_fps) / 4)
+            label << TypeConverter::Type2Str(track.m_type) << " " << cvRound(velocity) << " km/h";
+
+            int baseLine = 0;
+            double fontScale = (frame.cols < 2000) ? 0.5 : 1.;
+            cv::Size labelSize = cv::getTextSize(label.str(), cv::FONT_HERSHEY_TRIPLEX, fontScale, 1, &baseLine);
+
+            if (brect.x < 0)
             {
-                auto velocity = (3.6f * dist * m_fps) / period;
-                //std::cout << TypeConverter::Type2Str(track.m_type) << ": distance " << std::fixed << std::setw(2) << std::setprecision(2) << dist << " on time " << (period / m_fps) << " with velocity " << velocity << " km/h: " << track.m_confidence << std::endl;
-                if (velocity < 1.f || std::isnan(velocity))
-                    velocity = 0;
-                //label << TypeConverter::Type2Str(track.m_type) << " " << std::fixed << std::setw(2) << std::setprecision(2) << velocity << " km/h";
-                label << TypeConverter::Type2Str(track.m_type) << " " << cvRound(velocity) << " km/h";
-
-                int baseLine = 0;
-                double fontScale = (frame.cols < 2000) ? 0.5 : 1.;
-                cv::Size labelSize = cv::getTextSize(label.str(), cv::FONT_HERSHEY_TRIPLEX, fontScale, 1, &baseLine);
-
-                if (brect.x < 0)
-                {
-                    brect.width = std::min(brect.width, frame.cols - 1);
-                    brect.x = 0;
-                }
-                else if (brect.x + brect.width >= frame.cols)
-                {
-                    brect.x = std::max(0, frame.cols - brect.width - 1);
-                    brect.width = std::min(brect.width, frame.cols - 1);
-                }
-                if (brect.y - labelSize.height < 0)
-                {
-                    brect.height = std::min(brect.height, frame.rows - 1);
-                    brect.y = labelSize.height;
-                }
-                else if (brect.y + brect.height >= frame.rows)
-                {
-                    brect.y = std::max(0, frame.rows - brect.height - 1);
-                    brect.height = std::min(brect.height, frame.rows - 1);
-                }
-                cv::rectangle(frame, cv::Rect(cv::Point(brect.x, brect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(200, 200, 200), cv::FILLED);
-                cv::putText(frame, label.str(), brect.tl(), cv::FONT_HERSHEY_TRIPLEX, fontScale, cv::Scalar(0, 0, 0));
-
-                if (velocity > 3)
-                    AddToHeatMap(brect);
+                brect.width = std::min(brect.width, frame.cols - 1);
+                brect.x = 0;
             }
+            else if (brect.x + brect.width >= frame.cols)
+            {
+                brect.x = std::max(0, frame.cols - brect.width - 1);
+                brect.width = std::min(brect.width, frame.cols - 1);
+            }
+            if (brect.y - labelSize.height < 0)
+            {
+                brect.height = std::min(brect.height, frame.rows - 1);
+                brect.y = labelSize.height;
+            }
+            else if (brect.y + brect.height >= frame.rows)
+            {
+                brect.y = std::max(0, frame.rows - brect.height - 1);
+                brect.height = std::min(brect.height, frame.rows - 1);
+            }
+            cv::rectangle(frame, cv::Rect(cv::Point(brect.x, brect.y - labelSize.height), cv::Size(labelSize.width, labelSize.height + baseLine)), cv::Scalar(200, 200, 200), cv::FILLED);
+            cv::putText(frame, label.str(), brect.tl(), cv::FONT_HERSHEY_TRIPLEX, fontScale, cv::Scalar(0, 0, 0));
+
+            if (velocity > 3)
+                AddToHeatMap(brect);
         }
     }
 
@@ -185,10 +237,20 @@ bool CarsCounting::InitTracker(cv::UMat frame)
         m_heatMap = cv::Mat(m_keyFrame.size(), CV_32FC1, cv::Scalar::all(0));
     }
 
+    // The geo bindings may already be loaded by Detection() in the asynchronous mode.
+    if (!m_geoBindingsRead)
+    {
+        ReadGeobindings(frame.size());
+        m_geoBindingsRead = true;
+    }
+
     const int minStaticTime = 5;
 
     TrackerSettings settings;
-    settings.SetDistance(tracking::DistJaccard);
+    if (!m_geoParams.Empty())
+        settings.SetDistance(tracking::DistLocalCartesian);
+    else
+        settings.SetDistance(tracking::DistJaccard);
     settings.m_kalmanType = tracking::KalmanLinear;
     settings.m_filterGoal = tracking::FilterCenter;
     settings.m_lostTrackType = tracking::TrackCSRT; // Use KCF tracker for collisions resolving. Used if m_filterGoal == tracking::FilterRect
@@ -196,6 +258,7 @@ bool CarsCounting::InitTracker(cv::UMat frame)
     settings.m_dt = 0.3f;                           // Delta time for Kalman filter
     settings.m_accelNoiseMag = 0.2f;                // Accel noise magnitude for Kalman filter
     settings.m_distThres = 0.7f;                    // Distance threshold between region and object on two frames
+    settings.m_distThresLocalCartesian = 10.0f;     // Same threshold in meters for DistLocalCartesian
     settings.m_minAreaRadiusPix = frame.rows / 20.f;
     settings.m_maximumAllowedLostTime = 2.;         // Maximum allowed lost time
 
@@ -220,7 +283,6 @@ bool CarsCounting::InitTracker(cv::UMat frame)
 
     m_tracker = BaseTracker::CreateTracker(settings, m_fps);
 
-    ReadGeobindings(frame.size());
     return true;
 }
 

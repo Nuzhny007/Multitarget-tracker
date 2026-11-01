@@ -20,6 +20,7 @@ public:
 	~CTracker(void) = default;
 
     void Update(const regions_t& regions, cv::UMat currFrame, time_point_t frameTime) override;
+    void Update(const regions_t& regions, cv::UMat currFrame, time_point_t frameTime, tracking::DistType distType) override;
 
     void GetTracks(std::vector<TrackingObject>& tracks) const override;
     void GetRemovedTracks(std::vector<track_id_t>& trackIDs) const override;
@@ -38,8 +39,8 @@ private:
     std::unique_ptr<ShortPathCalculator> m_SPCalculator;
     std::map<objtype_t, std::shared_ptr<EmbeddingsCalculator>> m_embCalculators;
 
-    void CreateDistaceMatrix(const regions_t& regions, const std::vector<RegionEmbedding>& regionEmbeddings, distMatrix_t& costMatrix, track_t maxPossibleCost, track_t& maxCost);
-    void UpdateTrackingState(const regions_t& regions, cv::UMat currFrame, time_point_t frameTime);
+    void CreateDistaceMatrix(const regions_t& regions, const std::vector<RegionEmbedding>& regionEmbeddings, distMatrix_t& costMatrix, track_t maxPossibleCost, track_t& maxCost, bool useLocalCartesian);
+    void UpdateTrackingState(const regions_t& regions, cv::UMat currFrame, time_point_t frameTime, bool useLocalCartesian);
     void CalcEmbeddins(std::vector<RegionEmbedding>& regionEmbeddings, const regions_t& regions, cv::UMat currFrame) const;
 
     track_t GetEllipseDist(const CTrack& trackRef, const CRegion& reg);
@@ -117,10 +118,23 @@ void CTracker::GetRemovedTracks(std::vector<track_id_t>& trackIDs) const
 ///
 void CTracker::Update(const regions_t& regions, cv::UMat currFrame, time_point_t frameTime)
 {
+    const bool useLocalCartesian = m_settings.m_distType[tracking::DistLocalCartesian] > 0.0f;
+    Update(regions, currFrame, frameTime, useLocalCartesian ? tracking::DistLocalCartesian : tracking::DistJaccard);
+}
+
+///
+/// \brief CTracker::Update
+/// \param regions
+/// \param currFrame
+/// \param frameTime
+/// \param distType
+///
+void CTracker::Update(const regions_t& regions, cv::UMat currFrame, time_point_t frameTime, tracking::DistType distType)
+{
     m_lastFrameTime = frameTime;
     m_removedObjects.clear();
 
-    UpdateTrackingState(regions, currFrame, frameTime);
+    UpdateTrackingState(regions, currFrame, frameTime, distType == tracking::DistLocalCartesian);
 
     currFrame.copyTo(m_prevFrame);
 }
@@ -135,10 +149,12 @@ void CTracker::Update(const regions_t& regions, cv::UMat currFrame, time_point_t
 ///
 void CTracker::UpdateTrackingState(const regions_t& regions,
                                    cv::UMat currFrame,
-                                   time_point_t frameTime)
+                                   time_point_t frameTime,
+                                   bool useLocalCartesian)
 {
     const size_t colsTracks = m_tracks.size();	// Tracking objects
     const size_t rowsRegions = regions.size();	// Detections or regions
+    const track_t distThres = useLocalCartesian ? m_settings.m_distThresLocalCartesian : m_settings.m_distThres;
 
     assignments_t assignmentT2R(colsTracks, -1); // Assignments: index - track, value - region
 
@@ -208,9 +224,13 @@ void CTracker::UpdateTrackingState(const regions_t& regions,
         std::cout << "CTracker::UpdateTrackingState: Distance matrix between all tracks to all regions" << std::endl;
 #endif
         distMatrix_t costMatrix(colsTracks * rowsRegions);
-        const track_t maxPossibleCost = std::max(static_cast<track_t>(1.), static_cast<track_t>(currFrame.cols * currFrame.rows));
+        // In the local Cartesian mode the cost matrix is measured in meters, so the
+        // pixel based upper bound is not applicable.
+        const track_t maxPossibleCost = useLocalCartesian
+                ? static_cast<track_t>(1000000.0) // 1000 km
+                : std::max(static_cast<track_t>(1.), static_cast<track_t>(currFrame.cols * currFrame.rows));
         track_t maxCost = 0;
-        CreateDistaceMatrix(regions, regionEmbeddings, costMatrix, maxPossibleCost, maxCost);
+        CreateDistaceMatrix(regions, regionEmbeddings, costMatrix, maxPossibleCost, maxCost, useLocalCartesian);
 #if DRAW_DBG_ASSIGNMENT
         std::cout << "CTracker::UpdateTrackingState: maxPossibleCost = " << maxPossibleCost << ", maxCost = " << maxCost << std::endl;
         std::cout << "costMatrix: " << cv::Mat_<track_t>(rowsRegions, colsTracks, costMatrix.data()) << std::endl;
@@ -258,15 +278,15 @@ void CTracker::UpdateTrackingState(const regions_t& regions,
             {
                 ss << m_tracks[i]->GetID().ID2Str() << "-" << assignmentT2R[i] << ": " << std::fixed << std::setprecision(2) << costMatrix[i + assignmentT2R[i] * colsTracks];
 
-				if (costMatrix[i + assignmentT2R[i] * colsTracks] > m_settings.m_distThres)
+				if (costMatrix[i + assignmentT2R[i] * colsTracks] > distThres)
                 {
-                    ss << ">" << m_settings.m_distThres;
+                    ss << ">" << distThres;
                     cv::line(dbgAssignment, m_tracks[i]->GetLastRect().center, regions[assignmentT2R[i]].m_rrect.center, colorMatchedAboveThreshRed, 2);
 					DrawRRect(dbgAssignment, m_tracks[i]->LastRegion().m_rrect, colorMatchedAboveThreshRed, 1);
                 }
                 else
                 {
-                    ss << "<" << m_settings.m_distThres;
+                    ss << "<" << distThres;
                     cv::line(dbgAssignment, m_tracks[i]->GetLastRect().center, regions[assignmentT2R[i]].m_rrect.center, colorMatchedGreen, 1);
 					DrawRRect(dbgAssignment, m_tracks[i]->LastRegion().m_rrect, colorMatchedGreen, 1);
                 }
@@ -308,7 +328,7 @@ void CTracker::UpdateTrackingState(const regions_t& regions,
             }
 #endif
 
-            if (assignmentT2R[i] != -1 && costMatrix[i + assignmentT2R[i] * colsTracks] > m_settings.m_distThres)
+            if (assignmentT2R[i] != -1 && costMatrix[i + assignmentT2R[i] * colsTracks] > distThres)
                 assignmentT2R[i] = -1;
         }
 
@@ -429,7 +449,8 @@ void CTracker::CreateDistaceMatrix(const regions_t& regions,
                                    const std::vector<RegionEmbedding>& regionEmbeddings,
                                    distMatrix_t& costMatrix,
                                    track_t maxPossibleCost,
-                                   track_t& maxCost)
+                                   track_t& maxCost,
+                                   bool useLocalCartesian)
 {
     const size_t colsTracks = m_tracks.size();	// Tracking objects
     maxCost = 0;
@@ -552,6 +573,25 @@ void CTracker::CreateDistaceMatrix(const regions_t& regions,
                 // Mahalanobis
 				if (m_settings.m_distType[ind] > 0.0f && ind == tracking::DistMahalanobis)
 					dist += m_settings.m_distType[ind] * track->CalcMahalanobisDist(reg.m_rrect);
+				++ind;
+
+				// Euclidean distance in the local ENU plane, meters
+				if (useLocalCartesian && ind == tracking::DistLocalCartesian)
+				{
+					const track_t distMeters = track->CalcDistLocalCartesian(reg);
+					if (distMeters < 0.0f)
+					{
+						dist = maxPossibleCost;
+					}
+					else
+					{
+						const track_t weight = m_settings.m_distType[ind] > 0.0f ? m_settings.m_distType[ind] : static_cast<track_t>(1.0);
+						dist += weight * distMeters;
+					}
+
+					if constexpr (DIST_LOGS)
+						std::cout << "DistLocalCartesian : " << m_settings.m_distType[ind] << ", dist = " << dist << " m" << std::endl;
+				}
 				++ind;
 
 				assert(ind == tracking::DistsCount);

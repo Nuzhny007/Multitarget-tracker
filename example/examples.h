@@ -454,7 +454,8 @@ protected:
 					0.5f,  // DistJaccard
 					0.f,   // DistHist
 					0.5f,  // DistFeatureCos
-					0.f    // DistMahalanobis
+					0.f,   // DistMahalanobis
+					0.f    // DistLocalCartesian
 				};
 				if (!m_trackerSettings.SetDistances(distType))
 					m_logger->error("SetDistances failed! Absolutly summ must be equal 1");

@@ -205,6 +205,7 @@ struct TrackingObject
 	track_id_t m_ID;                   // Objects ID
 	cv::RotatedRect m_rrect;           // Coordinates
 	cv::Vec<track_t, 2> m_velocity;    // pixels/sec
+	double m_speedMps = -1.0;          // speed in the local ENU plane, m/s; -1 if unknown
 	objtype_t m_type = bad_type;       // Objects type name or empty value
 	float m_confidence = -1;           // From Detector with score (YOLO or SSD)
 	bool m_isStatic = false;           // Object is abandoned
@@ -236,6 +237,7 @@ struct TrackingObject
 		m_ID = track.m_ID;
 		m_rrect = track.m_rrect;
 		m_velocity = track.m_velocity;
+		m_speedMps = track.m_speedMps;
 		m_type = track.m_type;
 		m_confidence = track.m_confidence;
 		m_isStatic = track.m_isStatic;

@@ -411,7 +411,10 @@ public:
 
 	///
 	/// \brief The local plane (metric coordinates) of the bound points.
-	const LocalPlane& Plane() const { return m_plane; }
+	const LocalPlane& Plane() const
+    {
+        return m_plane;
+    }
 
 	///
 	std::vector<cv::Point> GetFramePoints() const
@@ -752,6 +755,7 @@ private:
     bool InitDetector(cv::UMat frame) override;
     bool InitTracker(cv::UMat frame) override;
 
+    void Detection(FrameInfo& frame) override;
     void DrawData(cv::Mat frame, const std::vector<TrackingObject>& tracks, int framesCounter, int currTime) override;
     void DrawTrack(cv::Mat frame, const TrackingObject& track, bool drawTrajectory, int framesCounter, const std::string& userLabel = "") override;
 
@@ -762,6 +766,7 @@ private:
 	// Binding frame coordinates to geographical coordinates
 	GeoParams<double> m_geoParams;
 	std::string m_geoBindFile;
+	bool m_geoBindingsRead = false;
 	bool ReadGeobindings(cv::Size frameSize);
 
 	// Heat map for visualization long term detections

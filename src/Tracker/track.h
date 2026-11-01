@@ -72,6 +72,14 @@ public:
     ///
     track_t CalcDistJaccard(const CRegion& reg) const;
     ///
+    /// \brief CalcDistLocalCartesian
+    /// Euclidean distance in the local ENU plane in meters between the last
+    /// track region and the detection region. Returns -1 if coordinates are invalid.
+    /// \param reg
+    /// \return
+    ///
+    track_t CalcDistLocalCartesian(const CRegion& reg) const;
+    ///
     /// \brief CTrack::CalcMahalanobisDist
     /// \param reg
     /// \return
@@ -119,6 +127,15 @@ public:
     double GetLostPeriod(time_point_t currTime) const;
     void ResetLostTime(time_point_t currTime);
 
+    ///
+    /// \brief CalcSpeedMps
+    /// Speed in the local ENU plane in meters per second. The value is
+    /// estimated by a least-squares fit of the recent metric positions.
+    /// \param currTime
+    /// \return speed in m/s or -1 if there is not enough recent data
+    ///
+    double CalcSpeedMps(time_point_t currTime) const;
+
     TrackingObject ConstructObject(time_point_t frameTime) const;
     track_id_t GetID() const;
 
@@ -132,6 +149,21 @@ private:
     Trace m_trace;
     cv::RotatedRect m_predictionRect;
     Point_t m_predictionPoint;
+
+    struct MetricTracePoint
+    {
+        cv::Point2d m_position;
+        time_point_t m_time;
+    };
+    std::deque<MetricTracePoint> m_metricTrace;
+
+    static constexpr double m_speedWindowSeconds = 1.5;
+    static constexpr double m_minSpeedPeriodSeconds = 0.3;
+    static constexpr double m_speedTimeoutSeconds = 0.5;
+    static constexpr size_t m_minSpeedPoints = 3;
+
+    void AddMetricPoint(const CRegion& region, time_point_t currTime);
+    void TrimMetricTrace(time_point_t currTime);
 
     track_id_t m_trackID;
     time_point_t m_lastDetectionTime;
