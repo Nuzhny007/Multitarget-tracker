@@ -6,6 +6,7 @@
 
 ## Latest Features
 
+- Add geographiclib for vehicles speed estimation [geographiclib/geographiclib](https://github.com/geographiclib/geographiclib)
 - Add YOLOE detection support [THU-MIG/yoloe](https://github.com/THU-MIG/yoloe)
 - Add new SOTA: YOLOv26, YOLOv26-obb and YOLOv26-seg models from [ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)
 - Add RT-DETRv4 (API similar D-FINE) detection model [RT-DETRs/RT-DETRv4](https://github.com/RT-DETRs/RT-DETRv4)
