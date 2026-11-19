@@ -148,6 +148,9 @@ private:
     CRegion m_lastRegion;
     Trace m_trace;
     cv::RotatedRect m_predictionRect;
+    // Prediction published by KalmanPredictRect for the rotated-rect filter
+    // (used by the lost-frame external-tracker path).
+    cv::RotatedRect m_predictedRRect;
     Point_t m_predictionPoint;
 
     struct MetricTracePoint

@@ -15,6 +15,14 @@
 > перенесены в `docs/roadmap-archive.md`. Полная история правок — в
 > git-истории (батч стабильности a8fdcb5 от 2026-11-11, точечные фиксы
 > 2026-11-15). Ниже — только открытая работа.
+>
+> **Дополнение (2026-11-19).** Python-пункт этапа M2 (pybind11,
+> numpy-владение, `pyproject.toml`, типизация/докстринги) закрыт; карточка —
+> в `docs/roadmap-archive.md`.
+>
+> **Дополнение (2026-11-19).** `FilterRRect` полностью поддержан
+> (linear CV/CA + UKF/AUKF, корректный угол, потерянные кадры, Mahalanobis);
+> M25 и M28–M30 закрыты — карточки в `docs/roadmap-archive.md`.
 
 ## 1. Легенда приоритетов
 
@@ -59,11 +67,7 @@
 | **M17** | P2 | `GeoParams::Pix2MapParams::Init`: при неудаче `m_toPix` остаётся неинициализированной | `example/CarsCounting.h:507-521` |
 | **M18** | P2 | `VideoExample::AsyncProcess`: при `batch_size > 1` отображается/обрабатывается только первый кадр батча | `example/VideoExample.cpp:309-328` |
 | **M19** | P2 | `AsyncDetector` измеряет не время обработки, а ожидание в очереди | `async_detector/AsyncDetector.cpp:77-90` |
-| **M25** | P2 | `m_velocity` документирован как «pixels/sec», но это приращение за шаг фильтра (dt не равен реальному интервалу) | `trajectory.h:207`, `Kalman.cpp:1206` |
 | **M27** | P3 | `CTrack` ctor №1 смещает первую точку траектории на `height/2`, ctor №2 — нет | `track.cpp:55` vs `110` |
-| **M28** | P3 | `CreateLinear(RRect)` резервирует `m_initialRects` вместо `m_initialRRects` | `Kalman.cpp:230` |
-| **M29** | P3 | `CreateLinear(Rect)`: `transitionMatrix(3,7) = dt/10` — несогласованно с остальными состояниями | `Kalman.cpp:107` |
-| **M30** | P3 | Средний угол при инициализации rrect-модели — арифметическое среднее (неверно у ±90°) | `Kalman.cpp:1069-1076` |
 | **M31** | P3 | `TrackID::ID2Module(0)` → деление на 0; `Str2ID` бросает `std::invalid_argument` | `defines.h:53-64` |
 | **M32** | P3 | `TrackerSettings::EmbeddingParams` использует `assert` в конструкторе (в Release не проверяет) | `TrackerSettings.h:216-224` |
 | **M34** | P3 | CVAT: жёстко `+00:00` при `localtime`; нет экранирования XML; `stop_frame = -1` при `framesCount = 0` | `example/cvatAnnotationsGenerator.h:183,199-208` |
@@ -123,8 +127,6 @@ M1, M2, M4, M5 и часть M3 (`CalcEmbeddins`) исправлены 2026-11-1
   добавление моделей и тестирование).
 * Для парсеров DNN: выбирать выходы по именам, а не по индексам,
   проверять глубину/размеры тензоров (M46, M47).
-* Привести `m_velocity` к задокументированным единицам (M25) или
-  переименовать в `m_velocityPerStep`.
 
 ### 4.4 Сборка и упаковка
 
@@ -149,8 +151,8 @@ M20–M23 и CMake-пакет исправлены 2026-11-15 — карточк
 * `data/settings*.ini`: убрать опечатки/устаревшие значения, не хранить
   абсолютные пути (M38, M39).
 * Добавить `docs/` (этот файл и `architecture.md`) в README.
-* Задокументировать единицы величин (dt, velocity, static time,
-  minAreaRadius*, maxTraceLength).
+* Единицы величин (dt, velocity, static time, minAreaRadius*,
+  maxTraceLength) задокументированы (2026-11-19) — `docs/architecture.md` §6.5.
 
 ---
 
@@ -200,14 +202,18 @@ M20–M23 и CMake-пакет исправлены 2026-11-15 — карточк
 - [ ] Реестр детекторов/трекеров вместо `switch`.
 - [ ] TensorRT-слой: абстракция над версиями TensorRT, вынести
       `common/` из репозитория или зафиксировать как submodule.
-- [ ] Python: pybind11 v2.11+, numpy-владение, `pyproject.toml`,
-      типизация/докстринги.
+- [x] Python: pybind11 v2.11+, numpy-владение, `pyproject.toml`,
+      типизация/докстринги *(2026-11-19: pybind11 2.13.6 vendored; кастер
+      `cv::Mat` копирует данные в обе стороны границы; `pymtracking.pyi`
+      (mypy-clean) + докстринги всех классов/методов, `.pyi` кладётся в
+      wheel рядом с модулем — см. карточку в `docs/roadmap-archive.md`)*.
 
 ### M3. Функциональное развитие (после стабилизации)
 
 - [ ] Сегментационные маски для OpenCV DNN (сейчас только TensorRT).
-- [ ] Полноценная поддержка `FilterRRect` (включая acceleration/UKF) или
-      явный отказ.
+- [x] Полноценная поддержка `FilterRRect` (включая acceleration/UKF)
+      *(2026-11-19: linear CV/CA + UKF/AUKF, корректный угол, потерянные
+      кадры, Mahalanobis; sensitivity-тесты — см. карточку в архиве)*.
 - [ ] ReID: несколько моделей/типов, батч-инференс, кэширование.
 - [x] Метрики MOT (MOTA/IDF1/ID-switch) как отдельный инструмент
       *(2026-11-16: `tools/mot_eval` — CLEAR MOT + ID-меры, семантика

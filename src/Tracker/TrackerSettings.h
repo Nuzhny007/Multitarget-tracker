@@ -326,22 +326,17 @@ struct TrackerSettings
 	///
 	/// \brief CheckFilterModel
 	/// Validates the Kalman motion model against the filter goal.
-	/// The rotated-rect filter (FilterRRect) has neither an unscented nor a
-	/// constant-acceleration model, so only KalmanLinear without acceleration
-	/// is supported for it.
-	/// \param reason Optional output with a human readable explanation
-	/// \return true if the combination is supported
+	/// All motion models (linear constant velocity/acceleration, UKF and
+	/// augmented UKF) are implemented for every filter goal, including the
+	/// rotated-rect filter, so there is nothing left to reject. The flag is
+	/// ignored by the unscented models (they always estimate acceleration),
+	/// exactly as for the point and rect filters.
+	/// \param reason Unused, kept for API compatibility.
+	/// \return always true
 	///
 	bool CheckFilterModel(std::string* reason = nullptr) const
 	{
-		if (m_filterGoal == tracking::FilterRRect &&
-			(m_kalmanType != tracking::KalmanLinear || m_useAcceleration))
-		{
-			if (reason != nullptr)
-				*reason = "FilterRRect supports only KalmanLinear without acceleration: "
-					"the unscented and constant-acceleration rotated-rect models are not implemented";
-			return false;
-		}
+		(void)reason;
 		return true;
 	}
 

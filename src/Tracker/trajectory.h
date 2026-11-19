@@ -204,7 +204,7 @@ struct TrackingObject
 	Trace m_trace;                     // Trajectory
 	track_id_t m_ID;                   // Objects ID
 	cv::RotatedRect m_rrect;           // Coordinates
-	cv::Vec<track_t, 2> m_velocity;    // pixels/sec
+	cv::Vec<track_t, 2> m_velocity;    // displacement per filter step (dt units), not pixels/sec
 	double m_speedMps = -1.0;          // speed in the local ENU plane, m/s; -1 if unknown
 	objtype_t m_type = bad_type;       // Objects type name or empty value
 	float m_confidence = -1;           // From Detector with score (YOLO or SSD)

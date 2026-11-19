@@ -316,7 +316,7 @@ class BaseTracker {
 | `DistJaccard` | IoU bounding rect | |
 | `DistHist` | `cv::compareHist(BHATTACHARYYA)` | ROI пересекается с кадром; при отсутствии/несовпадении гистограмм расстояние = 1 |
 | `DistFeatureCos` | косинус ReID-эмбеддингов | ROI клэмпится к кадру |
-| `DistMahalanobis` | `cv::Mahalanobis` | |
+| `DistMahalanobis` | `cv::Mahalanobis` | S = H·P·Hᵀ + R; для UKF/AUKF — через матрицу селекции H |
 | `DistLocalCartesian` | евклид в ENU, метры | порог `m_distThresLocalCartesian` |
 
 Дополнительно проверяется совместимость типов (`CheckType` + `m_nearTypes`):
@@ -343,20 +343,55 @@ class BaseTracker {
 | point, const acceleration | x, y, vx, vy, ax, ay | x, y |
 | rect, const velocity | x, y, w, h, vx, vy, vw, vh | x, y, w, h |
 | rect, const acceleration | x, y, w, h, vx, vy, vw, vh, ax, ay, aw, ah | x, y, w, h |
-| rrect, const velocity | x, y, w, h, angle, vx, vy, vw, vh, va | x, y, w, h, angle |
-| UKF/augmented UKF | 6 (point) или 8 (rect) | 2 или 4 |
+| rrect, const velocity | x, y, w, h, angle, vx, vy, vw, vh, vangle | x, y, w, h, angle |
+| rrect, const acceleration | x, y, w, h, angle, vx, vy, vw, vh, vangle, ax, ay, aw, ah, aangle | x, y, w, h, angle |
+| UKF/AUKF point | x, y, vx, vy, ax, ay | x, y |
+| UKF/AUKF rect | x, y, vx, vy, ax, ay, w, h | x, y, w, h |
+| UKF/AUKF rrect | x, y, vx, vy, ax, ay, w, h, angle, vangle | x, y, w, h, angle |
 
-Инициализация выполняется по первым двум детекциям (линейная регрессия),
-до этого фильтр не работает и трек использует «сырые» координаты.
-Для линейной модели есть «inertia correction»: `m_deltaTime` адаптивно
-меняется в диапазоне `[dt, 2*dt]` в зависимости от невязки.
+`CheckFilterModel` (`TrackerSettings`) принимает все комбинации
+`FilterGoal` × `KalmanType` × `useAcceleration`: несовместимых больше нет
+(rrect-UKF реализован). Флаг `use_acceleration` влияет только на линейный
+фильтр; UKF/AUKF всегда оценивают ускорение.
+
+**Инициализация.** По первым двум корректным детекциям: позиция = вторая
+детекция, скорость = конечная разность `p1 − p0` (в единицах шага фильтра).
+Для rrect угол инициализируется круговым средним (период 180°).
+
+**Единицы.** `delta_time` (`dt`) — это **шаг фильтра**, а не реальные секунды:
+`Update` вызывается раз в кадр, а fps в модель не входит. Поэтому
+`TrackingObject::m_velocity` — приращение за шаг фильтра (пиксели/шаг), а не
+пиксели/сек; метрическая скорость — отдельное поле `m_speedMps` (ENU, м/с),
+которое считается по времени кадров (`CTrack::CalcSpeedMps`). Для линейной
+CV-модели есть «inertia correction»: `m_deltaTime` адаптивно меняется в
+диапазоне `[dt, 2*dt]` в зависимости от невязки.
+
+**Угол.** `cv::RotatedRect::angle` неориентированный (период 180°). Состояние
+фильтра хранит угол непрерывно; измерение разворачивается на кратные 180° к
+предсказанию перед коррекцией, а наружу угол отдаётся в `(-90, 90]`. Это
+устраняет скачок при переходе через ±90°.
+
+**Процессный шум.** CV-модели используют `G = [dt²/2, dt]`, CA-модели —
+`G = [dt²/2, dt, 1]` (белый шум ускорения). UKF/AUKF используют диагональную
+ковариацию процесса `1e-3` по всем состояниям.
+
+**Потерянные кадры.** `CTrack::KalmanPredictRect` для `FilterRRect` вызывает
+`GetRRectPrediction()` и сохраняет предсказание; на кадре без детекции это
+даёт чистое предсказание (без коррекции к устаревшему posterior). Внешний
+bbox-трекер даёт только центр: размер и угол берутся из предсказания.
+
+**Mahalanobis.** `DistMahalanobis` использует инновационную ковариацию
+`S = H·P·Hᵀ + R`; для линейного фильтра — напрямую, для UKF/AUKF — через
+матрицу селекции `H` и `getState()/getErrorCov()/getMeasurementNoiseCov()`.
 
 ### 6.6 Визуальные трекеры потерянных целей
 
-При `FilterGoal = FilterRect` и `LostTrackType != TrackNone` `CTrack` держит
-`cv::Tracker` (KCF/CSRT/DaSiamRPN/Nano/Vit). На кадре без детекции трекер
-обновляется по ROI вокруг предсказания; если IoU с детекцией < 0.5 —
-трекер переинициализируется. Требует `USE_OCV_KCF` и `opencv_contrib`.
+При `FilterGoal = FilterRect`/`FilterRRect` и `LostTrackType != TrackNone`
+`CTrack` держит `cv::Tracker` (KCF/CSRT/DaSiamRPN/Nano/Vit). На кадре без
+детекции трекер обновляется по ROI вокруг предсказания; если IoU с детекцией
+< 0.5 — трекер переинициализируется. Для `FilterRRect` bbox-трекер даёт только
+центр: размер и угол берутся из предсказания фильтра (bbox не знает поворота).
+Требует `USE_OCV_KCF` и `opencv_contrib`.
 
 ### 6.7 ByteTrack
 
@@ -609,7 +644,7 @@ Python-обёртка, `async_detector`, `BUILD_CARS_COUNTING`, `BUILD_ONNX_TENS
 
 | Файл | Роль |
 |---|---|
-| `src/mtracking/defines.h` | `CRegion`, `TrackID`, enums, `Clamp`, `DrawFilledRect`, `SaveMat`, регрессия |
+| `src/mtracking/defines.h` | `CRegion`, `TrackID`, enums, `Clamp`, `DrawFilledRect`, `SaveMat` |
 | `src/mtracking/object_types.*` | глобальный реестр типов объектов |
 | `src/mtracking/nms.h` | NMS (3 варианта) |
 | `src/Tracker/BaseTracker.*` | `BaseTracker`, `CTracker`, фабрика |

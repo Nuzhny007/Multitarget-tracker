@@ -85,8 +85,10 @@ private:
 #ifdef USE_OCV_UKF
     void CreateUnscented(Point_t xy0, Point_t xyv0);
     void CreateUnscented(cv::Rect_<track_t> rect0, Point_t rectv0);
+    void CreateUnscented(cv::RotatedRect rrect0, Point_t rrectv0);
     void CreateAugmentedUnscented(Point_t xy0, Point_t xyv0);
     void CreateAugmentedUnscented(cv::Rect_<track_t> rect0, Point_t rectv0);
+    void CreateAugmentedUnscented(cv::RotatedRect rrect0, Point_t rrectv0);
 #endif
 };
 

@@ -31,6 +31,7 @@ CTrack::CTrack(const CRegion& region,
       m_kalman(kalmanType, useAcceleration, deltaTime, accelNoiseMag),
       m_lastRegion(region),
       m_predictionRect(region.m_rrect),
+      m_predictedRRect(region.m_rrect),
       m_predictionPoint(region.m_rrect.center),
       m_trackID(trackID),
       m_lastDetectionTime(currTime),
@@ -87,6 +88,7 @@ CTrack::CTrack(const CRegion& region,
       m_kalman(kalmanType, useAcceleration, deltaTime, accelNoiseMag),
       m_lastRegion(region),
       m_predictionRect(region.m_rrect),
+      m_predictedRRect(region.m_rrect),
       m_predictionPoint(region.m_rrect.center),
       m_trackID(trackID),
       m_lastDetectionTime(currTime),
@@ -807,7 +809,14 @@ tracking::FilterGoal CTrack::GetFilterGoal() const
 ///
 void CTrack::KalmanPredictRect()
 {
-    m_kalman.GetRectPrediction();
+    // FilterRRect keeps its size/angle outside the first four state entries,
+    // and the UKF state layout differs from the linear one, so use the
+    // rotated-rect prediction. Store it for the lost-frame external-tracker
+    // path in RectUpdate.
+    if (m_filterGoal == tracking::FilterGoal::FilterRRect)
+        m_predictedRRect = m_kalman.GetRRectPrediction();
+    else
+        m_kalman.GetRectPrediction();
 }
 
 ///
@@ -975,6 +984,15 @@ void CTrack::RectUpdate(const CRegion& region,
 			cv::Rect prect(newRect.x + roiRect.x, newRect.y + roiRect.y, newRect.width, newRect.height);
 #endif
 			trackedRRect = cv::RotatedRect(cv::Point2f(prect.x + prect.width / 2.f, prect.y + prect.height / 2.f), cv::Size2f(static_cast<float>(prect.width), static_cast<float>(prect.height)), 0);
+			if (m_filterGoal == tracking::FilterGoal::FilterRRect)
+			{
+				// The external tracker only provides an axis-aligned box: it
+				// has no orientation and its size overestimates a rotated
+				// object. Keep the filter's predicted size and angle and use
+				// the tracked center only.
+				trackedRRect.size = m_predictedRRect.size;
+				trackedRRect.angle = m_predictedRRect.angle;
+			}
 			wasTracked = true;
 		}
 #else
@@ -1046,18 +1064,10 @@ void CTrack::RectUpdate(const CRegion& region,
     {
         if (wasTracked)
         {
-            if (trackedRRect.angle > 0.5f)
-            {
-                m_predictionRect = trackedRRect;
-                m_kalman.Update(trackedRRect.boundingRect(), true);
-            }
-            else
-            {
-				if (m_filterGoal == tracking::FilterGoal::FilterRect)
-					UpdateRRect(brect, m_kalman.Update(trackedRRect.boundingRect(), true));
-				else
-					m_predictionRect = m_kalman.Update(trackedRRect, true);
-            }
+			if (m_filterGoal == tracking::FilterGoal::FilterRect)
+				UpdateRRect(brect, m_kalman.Update(trackedRRect.boundingRect(), true));
+			else
+				m_predictionRect = m_kalman.Update(trackedRRect, true);
         }
         else
         {

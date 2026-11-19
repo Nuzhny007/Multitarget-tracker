@@ -2176,3 +2176,170 @@ yolo11m/x, порог conf); на VisDrone отрицательный MOTA — �
 
 ---
 
+### M2 (этап «Архитектурный рефакторинг»). Python: pybind11 v2.11+, numpy-владение, `pyproject.toml`, типизация/докстринги
+
+**Задача:** закрыть Python-пункт этапа M2 (`docs/roadmap.md`, раздел 5):
+обновлённый pybind11, корректное владение numpy-буферами в обе стороны
+границы, `pyproject.toml` и типизация/докстринги публичного API.
+
+**Состояние до правки (2026-11-19):**
+
+* `thirdparty/pybind11` — 2.13.6 (≥ 2.11, требование уже выполнено);
+* `pyproject.toml` — есть (PEP 517, `setuptools>=64`, `wheel`), добавлен в H16;
+* кастер `cv::Mat`: `cast` копировал данные (C14), а `load` оборачивал
+  `info.ptr` без владения — `cv::Mat` не удерживал numpy-массив, и буфер мог
+  быть освобождён, пока трекер/детектор ещё ссылается на кадр или ROI;
+* `.pyi`-стабов и type hints не было; докстринги — только у `m.doc()` и
+  трёх свободных функций.
+
+**Сделано (2026-11-19):**
+
+1. `src/python_bind/mtracker.cpp`, `type_caster<cv::Mat>::load` — данные
+   numpy-массива копируются в собственный `cv::Mat` (`.clone()`): `cv::Mat`
+   больше не зависит от времени жизни Python-объекта, а `UMat`, полученный
+   из такого `Mat`, разделяет уже принадлежащий C++ буфер. Обе стороны
+   границы (numpy → C++ и C++ → numpy) копируют данные — ownership определён
+   однозначно.
+2. `src/python_bind/pymtracking.pyi` — type stubs публичного API (`KeyVal`,
+   `TrackerSettings`, `MTracker` с вложенными enum'ами, `BaseDetector` /
+   `MotionDetector`, `TrackingObject`, `CRegion`, `CvRect`, `CvRRect`,
+   свободные функции; кадры — `numpy.ndarray`).
+3. `src/python_bind/mtracker.cpp` — докстринги всех классов, методов,
+   свойств и значений enum'ов; `m.doc()` описывает формат кадров и
+   семантику копирования. Учтено, что pybind11 принимает строковый литерал
+   и для `class_`/`enum_`, а `py::doc(...)` для класса молча игнорируется:
+   в 2.13.6 `process_attribute<doc>` задаёт только `function_record::doc`,
+   но не `type_record::doc`.
+4. `setup.py` — `pymtracking.pyi` копируется в каталог сборки рядом с
+   расширением, поэтому попадает и в wheel, и в `pip install .`.
+
+**Проверка (локально, MSVC 17.14, Python 3.10.11):**
+
+* `cmake --build . --target pymtracking --config Release` — компиляция и
+  линковка проходят;
+* smoke-тест: import, `__doc__` классов/методов, numpy round-trip через
+  `passthru`, `MotionDetector.Detect` и `MTracker.Update` на numpy-кадре,
+  освобождение исходного массива сразу после конструктора детектора — OK;
+* `mypy 2.4.1` по стабу и по типизированному consumer-скрипту
+  (`MYPYPATH=src/python_bind`) — 0 ошибок.
+
+---
+
+### M25. Единицы `TrackingObject::m_velocity`
+
+**Где:** `src/Tracker/trajectory.h:207`, `src/Tracker/Kalman.cpp` (`GetVelocity`).
+
+**Проблема:** поле документировано как «pixels/sec», но это приращение
+позиции за **шаг фильтра**. `TKalmanFilter::Update` вызывается раз в кадр,
+а `delta_time` — настраиваемый параметр (по умолчанию `0.4`), не реальный
+интервал между кадрами. Метрическая скорость — отдельное поле
+`TrackingObject::m_speedMps` (ENU, м/с), считается по времени кадров.
+
+**Сделано (2026-11-19):**
+* `trajectory.h` — комментарий `m_velocity` исправлен на «displacement per
+  filter step (dt units), not pixels/sec»;
+* `docs/architecture.md` §6.5 — раздел «Единицы»: `dt` = шаг фильтра,
+  `m_velocity` = пиксели/шаг, `m_speedMps` = м/с;
+* README — уточнён тип/единицы скорости.
+
+Переименование в `m_velocityPerStep` не выполнялось (публичный API/биндинги);
+семантика зафиксирована документацией.
+
+---
+
+### M28. `CreateLinear(RotatedRect)` резервирует не тот вектор
+
+**Где:** `src/Tracker/Kalman.cpp` (`CreateLinear(cv::RotatedRect, ...)`).
+
+**Проблема:** `m_initialRects.reserve(MIN_INIT_VALS)` вместо
+`m_initialRRects` — copy-paste, безвредно (меняется capacity, не size), но
+вводит в заблуждение и скрывает ошибку при будущем изменении.
+
+**Сделано (2026-11-19):** `m_initialRRects.reserve(MIN_INIT_VALS)`.
+Проверено инициализацией rrect по двум точкам в `build/phase1_test`.
+
+---
+
+### M29. `transitionMatrix(3,7) = dt/10` в rect CV-модели
+
+**Где:** `src/Tracker/Kalman.cpp` (`CreateLinear(cv::Rect_<track_t>, ...)`).
+
+**Проблема:** связка `height <- vh` масштабирована как `dt/10`, в отличие от
+остальных состояний; процессная ковариация при этом рассчитана на полный
+`dt`. Влияние ограничено первым предсказанием: первая inertia-коррекция
+перезаписывает `(3,7)` на `dt`.
+
+**Сделано (2026-11-19):** `dt/10` заменено на `m_deltaTime`; модель
+согласована. Проверено `build/h2_test` (rect CV) и `build/h6_test` (rect CA).
+
+---
+
+### M30. Средний угол при инициализации rrect-модели
+
+**Где:** `src/Tracker/Kalman.cpp` (`Update(cv::RotatedRect, ...)`).
+
+**Проблема:** среднее арифметическое углов неверно у разрыва ±90°: `89°` и
+`-89°` давали `0°` вместо `90°`; при повороте объекта фильтр стартовал с
+неверной ориентации.
+
+**Сделано (2026-11-19):** круговое среднее через `(sin 2θ, cos 2θ)` с периодом
+180° (`CircularMeanHalfTurnDeg`). Дополнительно измерение угла разворачивается
+на кратные 180° к предсказанию перед `correct()`, а наружу угол отдаётся в
+`(-90, 90]` (`NormalizeRotatedRectAngle`). Проверено `build/phase1_test`:
+`(89, -89) -> 90`, переход через ±90° не даёт скачка.
+
+---
+
+### M3 (этап «Функциональное развитие»). Полноценная поддержка `FilterRRect`
+
+**Задача:** закрыть пункт M3 `docs/roadmap.md` — поддержать для `FilterRRect`
+все модели Калмана, а не только `KalmanLinear` без ускорения.
+
+**Состояние до правки:** `CreateLinearAcceleration(RotatedRect)` и
+`CreateUnscented/AugmentedUnscented(RotatedRect)` — заглушки с сообщением в
+`stderr`; `CheckFilterModel` отвергал `FilterRRect` + acceleration/UKF;
+инициализация угла — арифметическое среднее; `GetRRectPrediction` для UKF
+читал `w,h,angle` из индексов 2,3,4 (неверно для UKF-раскладки).
+
+**Сделано (2026-11-19), три этапа:**
+
+1. **Linear rrect + acceleration.** 15-мерная CA-модель
+   `[x,y,w,h,angle, vx..vangle, ax..aangle]`; общие
+   `MakeAccelerationTransition`/`MakeAccelerationProcessNoise` (белый шум
+   ускорения `G=[dt²/2, dt, 1]` вместо «растянутого CV-шума»); M28–M30;
+   инициализация по двум точкам конечной разностью — `get_lin_regress_params`
+   удалена (она вырождалась в `v = p1 − p0`).
+2. **UKF/AUKF rrect.** 10-мерное состояние
+   `[x,y,vx,vy,ax,ay,w,h,angle,vangle]`, 5 измерений; `AcceleratedModel`
+   обобщён на `UkfModelKind::{Point,Rect,RRect}`; исправлен «двойной шаг» в
+   `measurementFunction` (`h(x)` больше не проектирует состояние на `dt`
+   повторно — раньше фильтр корректировался по позиции на шаг впереди
+   измерения); process noise point UKF/AUKF поднят с `1e-14` до `1e-3`
+   (иначе Cholesky расширенной ковариации давал NaN: `success` в OpenCV не
+   проверяется).
+3. **Интеграция.** `CTrack::KalmanPredictRect` для `FilterRRect` вызывает
+   `GetRRectPrediction()` и публикует предсказание; потерянный кадр — чистое
+   предсказание; внешний bbox-трекер даёт только центр (размер/угол — из
+   предсказания); `GetPredictionAndInnovCov` реализован для UKF через матрицу
+   селекции `H` (Mahalanobis работает для UKF rrect); `CheckFilterModel`
+   принимает все комбинации.
+
+**Проверка (локально, MSVC 17.14, OpenCV 4.14 contrib, `USE_OCV_UKF=ON`):**
+
+* `build/phase1_test` — linear rrect CV/CA, индексы скорости, круговое среднее,
+  переход через ±90°;
+* `build/phase2_test` — UKF/AUKF point/rect/rrect: предсказание (double-step
+  fixed), размеры/угол, ±90°, стабильность 40 кадров;
+* `build/phase3_test` — потерянный кадр = предсказание для всех rrect-моделей,
+  `GetPredictionAndInnovCov` (S = 2×2/4×4/5×5), end-to-end `CTrack`;
+* sensitivity: возврат старого `measurementFunction` даёт предсказание на шаг
+  назад; возврат старого `KalmanPredictRect` даёт ~61 вместо 70 на потерянном
+  кадре — тесты падают;
+* регрессия `h2`, `h5`, `h6`, `phase1`, `phase2`, `phase3` — exit=0;
+  `mtracking`, `MultitargetTracker`, `AsyncDetector` собираются.
+
+**Осталось (вне карточки):** полный регресс на OBB-видео (MOTA/IDF1) —
+интеграционный прогон с детектором и GT; KCF-путь на реальном кадре не покрыт
+автотестом (нужна текстурированная сцена).
+
+---

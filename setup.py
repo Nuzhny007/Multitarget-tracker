@@ -111,6 +111,15 @@ class BuildCMakeExt(build_ext):
             self.announce(pyd_path + " -> " + target, level=2)
             shutil.move(pyd_path, target)
 
+        # Ship the type stub next to the extension module so that type
+        # checkers (mypy/Pyright) see ``pymtracking.pyi`` in the wheel too
+        # (roadmap M2: typing).
+        stub = os.path.join(extension.sourcedir, "src", "python_bind", "pymtracking.pyi")
+        if os.path.exists(stub):
+            shutil.copyfile(stub, os.path.join(extension_path, "pymtracking.pyi"))
+        else:
+            self.announce("pymtracking.pyi not found, the wheel will be untyped", level=1)
+
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()

@@ -49,16 +49,17 @@ Available through `CreateDetector` function with different `detectorType`:
 #### 2. Matching Algorithms
 For solving assignment problems:
 - **Hungarian Algorithm** (`tracking::MatchHungrian`) - O(N³) complexity
-- **LAPJV** (`tracking::MatchBipart`) - O(M*N²) complexity
+- **LAPJV** (`tracking::MatchLAPJV`) - O(M*N²) complexity
 - **Distance Metrics**:
   - Center distance (`tracking::DistCenters`)
   - Bounding box distance (`tracking::DistRects`)
   - Jaccard/IoU similarity (`tracking::DistJaccard`)
 
 #### 3. Trajectory Smoothing
-- Kalman filters: Linear (`tracking::KalmanLinear`) and Unscented (`tracking::KalmanUnscented`)
-- State models: Constant velocity and constant acceleration
-- Tracking modes: Position-only (`tracking::FilterCenter`) and position+size (`tracking::FilterRect`)
+- Kalman filters: Linear (`tracking::KalmanLinear`), Unscented (`tracking::KalmanUnscented`) and augmented Unscented (`tracking::KalmanAugmentedUnscented`)
+- State models: Constant velocity and constant acceleration (for all tracking modes)
+- Tracking modes: Position-only (`tracking::FilterCenter`), position+size (`tracking::FilterRect`) and rotated rectangle (`tracking::FilterRRect`)
+- Velocity: `TrackingObject::m_velocity` is the displacement per filter step (`delta_time`), not pixels/sec; `m_speedMps` is the metric speed in m/s (when local coordinates are available)
 - Specialized features: Abandoned object detection, line intersection counting
 
 #### 4. Visual Search
