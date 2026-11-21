@@ -150,7 +150,7 @@ M20–M23 и CMake-пакет исправлены 2026-11-15 — карточк
   пример Python, список поддерживаемых моделей и ограничений (M37).
 * `data/settings*.ini`: убрать опечатки/устаревшие значения, не хранить
   абсолютные пути (M38, M39).
-* Добавить `docs/` (этот файл и `architecture.md`) в README.
+* Добавить `docs/` (этот файл, `architecture.md`, `gpu-pipeline.md`) в README.
 * Единицы величин (dt, velocity, static time, minAreaRadius*,
   maxTraceLength) задокументированы (2026-11-19) — `docs/architecture.md` §6.5.
 
@@ -222,7 +222,8 @@ M20–M23 и CMake-пакет исправлены 2026-11-15 — карточк
 - [x] Экспорт треков в MOTChallenge/CVAT (сейчас CVAT есть, MOT — нет)
       *(2026-11-16: `--mot_res=<file>` в `MultitargetTracker`, формат
       `frame,id,x,y,w,h,conf,-1,-1,-1`, 1-based кадры как в GT)*.
-- [ ] GPU-декодирование/препроцессинг (опционально).
+- [ ] GPU-декодирование/препроцессинг (опционально) — анализ и пофазный план
+      в `docs/gpu-pipeline.md` (2026-11-21).
 
 ---
 
