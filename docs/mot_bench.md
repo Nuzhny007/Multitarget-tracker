@@ -1,192 +1,173 @@
-# MOT benchmark: как гонять и считать метрики
+# MOT benchmark: сводные результаты
 
-Инфраструктура для прогонов трекера на стандартных датасетах (MOT20,
-VisDrone-MOT2019), экспорта результатов и расчёта метрик
-(MOTA/MOTP/IDF1/IDSW). Позволяет сравнивать конфигурации детектора/трекера
-и ловить регрессии.
+Сравнение конфигураций детектора/трекера на MOT20 (train) и
+VisDrone-MOT2019 (val). Метрики считает `tools/mot_eval` (семантика
+py-motmetrics, кросс-чек с py-motmetrics 1.4.0 пройден): CLEAR MOT
+(MOTA/MOTP) и ID-меры (IDF1/IDP/IDR/IDSW). Дополнительно приводятся
+`Recall = matches / GT` и `Precision = matches / predictions` (совпадение
+рамок, не ID-метрики).
 
-## 1. Экспорт результатов трекера
+Все прогоны — на TensorRT, с единым трекером **ByteTrack** и
+`match_type=1` (LAPJV). OCV DNN CUDA из сравнения исключён (медленный и
+неточный).
 
-`MultitargetTracker` пишет треки в формате MOTChallenge при задании
-`--mot_res=<файл>`:
+Железо: RTX 4070 Laptop (8 ГБ), TensorRT 10.16.1.11, CUDA 13.2.
 
-```
-frame,id,x,y,w,h,conf,-1,-1,-1
-```
+## 1. Методика и воспроизведение
 
-Кадры 1-based (совпадают с нумерацией GT в MOT20/VisDrone), `x,y` — левый
-верхний угол бокса, `conf` клампится в [0..1]. Флаг `--no_show=1` отключает
-все окна (обязателен для батч-прогонов).
-
-## 2. Метрики: tools/mot_eval
-
-Отдельный инструмент (таргет `mot_eval`, опция `BUILD_MOT_EVAL`, связан с
-`mtracking`):
-
-```
-mot_eval --gt <gt.txt> --res <res.txt>
-         [--types <types.txt>]        # имена классов, id = номер строки + 1
-         [--gt_classes ids]           # какие классы GT оценивать (через ;)
-         [--gt_ignore_classes ids]    # классы-подавители FP (через ;)
-         [--iou 0.5] [--width W --height H]   # клэмпинг к кадру
-         [--min_area px^2]            # отсечка мелких result-боксов
-         [--label имя] [--out_csv файл.csv]   # CSV с аппендом
-```
-
-Семантика повторяет py-motmetrics:
-
-* CLEAR MOT: шаг 1 — реставрация совпадений предыдущего кадра (приоритет
-  непрерывности), шаг 2 — Hungarian по оставшимся парам (IoU ≥ 0.5);
-  IDSW — смена гипотезы у GT-трека.
-* ID-меры (IDF1/IDTP/IDFP/IDFN): глобальное min-cost назначение
-  «GT-трек × гипотеза-трек» в layout py-motmetrics (стоимость пары =
-  oc + hc − 2·tps, где tps — число кадров с IoU ≥ порога у пары).
-* MOTA = 1 − (FN + FP + IDSW) / numObjects (может быть отрицательной);
-  MOTP — средний (1 − IoU) совпадений (конвенция py-motmetrics),
-  MOTP (IoU) — средний IoU (leaderboard-конвенция).
-* Классы GT, не входящие в `--gt_classes` и `--gt_ignore_classes`,
-  выбрасываются целиком (не GT, не подавители). Игнор-классы никогда не
-  дают FN, но давят FP.
-* Подавление FP игнор-областями: IoU ≥ minIou с игнор-боксом **или центр
-  result-бокса внутри игнор-бокса** (в VisDrone категория 0 — большие
-  области; для маленьких боксов внутри них IoU-тест не срабатывает).
-
-### Валидация
-
-* `tools/mot_eval/crosscheck_motmetrics.py` — кросс-чек с py-motmetrics
-  1.4.0 (`c:\python\python310\python.exe`) на MOT20-05: GT-vs-GT и
-  perturbed GT с инъекцией FN/FP/IDSW. Все метрики совпадают в пределах
-  округления вывода (4 знака).
-* `tools/mot_eval/tests_mot_eval.py` — 9 синтетических кейсов с ручным
-  расчётом (perfect, FN, FP, ID switch, подавление игнор-областью по IoU и
-  по центру, выброшенный класс, клэмпинг, min_area).
-
-## 3. Прогон бенчмарка: data/mot_bench.ps1
-
-```
-powershell -ExecutionPolicy Bypass -File data\mot_bench.ps1 -Dataset mot20 -OutDir <dir>
-powershell -ExecutionPolicy Bypass -File data\mot_bench.ps1 -Dataset visdrone -OutDir <dir>
-powershell -ExecutionPolicy Bypass -File data\mot_bench.ps1 -Dataset all -OutDir <dir> [-EvalOnly]
-```
-
-* `-EvalOnly` — пересчитать метрики по уже сохранённым `<seq>.txt`
-  (быстрая итерация по настройкам оценки без перепрогона трекера).
-* Результаты: `<dir>\<seq>.txt` (MOT-формат), `<dir>\<dataset>.csv`
-  (по строке на последовательность), логи запусков `<seq>.txt.run.log/err`.
-* Датасеты: MOT20 в `C:\work\dataset\motchallenge` (img1 + seqinfo.ini +
-  MOT20Labels), VisDrone2019-MOT-val в `C:\work\dataset\visdrone\mot_2019`.
-
-## 4. Конфигурации детекции
-
-| | settings_mot20.ini | settings_visdrone.ini |
+| | MOT20 (train) | VisDrone-MOT2019 (val) |
 |---|---|---|
-| Модель | YOLO11s (COCO), 736×1280 | YOLOv8l-visdrone, 960×1280 |
-| Бэкенд | TensorRT (`detector_backend=5`) | OpenCV DNN CUDA (`=6`) |
-| Классы | white_list=person | все 10 классов VisDrone |
-| conf | 0.3 | 0.25 |
-
-Обе модели экспортированы из PT (ultralytics 8.4.90, opset 13) — исходники:
-`C:\work\yolo\ultralytics\weights` (mshamrai/yolov8l-visdrone с HuggingFace,
-`yolo11s.pt`). Замечание: прямоугольный вход YOLO11 не работает в OpenCV
-DNN (NaryEltwise с транспонированными шейпами), поэтому MOT20 гоняется на
-TensorRT; VisDrone-модель (YOLOv8) работает в OCV DNN CUDA после фикса H23
-(W/H автодетекта входа).
-
-## 5. Конфигурация оценки
-
-| | MOT20 | VisDrone val |
-|---|---|---|
-| eval | класс 1 (Pedestrian) | классы 1–10 |
-| ignore (давят FP) | 2,7,8 + 9,10,11,12 | 0, 11 |
+| eval-классы | 1 (Pedestrian) | 1–10 |
+| ignore (давят FP) | 2,7,8,9,10,11,12 | 0, 11 |
 | выброшены | 3,4,5,6 | — |
-| min_area | 0 | 800 |
-| кадр | из seqinfo.ini | из первого кадра |
+| `min_area` | 0 | 800 |
 
-Игнор-набор MOT20 следует конвенции TrackEval (дистракторы/окклюдеры
-подавляют FP). `--min_area=800` для VisDrone — практика против потока
-детекций объектов, отсутствующих в MOT-разметке (модель уверенно видит
-далёкие мелкие объекты: медиана conf у таких FP ≈ 0.41 — порогом conf это
-не лечится).
+`min_area` для VisDrone — практика против потока детекций объектов,
+отсутствующих в MOT-разметке (мелкие/дальние). Важно: фильтр применяется
+**только на этапе оценки** (`mot_eval --min_area`), а не в трекере.
 
-## 6. Базовые результаты (baseline1, 2026-11-16/17)
+```powershell
+# MOT20 (baseline)
+powershell -ExecutionPolicy Bypass -File data\mot_bench.ps1 -Dataset mot20 -OutDir <dir>
 
-MOT20 train (TensorRT, yolo11s/person):
+# VisDrone: основной прогон (YOLOv8l-visdrone, TensorRT FP16 — по умолчанию)
+powershell -ExecutionPolicy Bypass -File data\mot_bench.ps1 -Dataset visdrone -OutDir <dir>
 
-| Seq | GT | MOTA | IDF1 | IDSW | MOTP (IoU) |
-|---|---|---|---|---|---|
-| MOT20-01 | 19870 | 0.255 | 0.290 | 509 | 0.714 |
-| MOT20-02 | 154742 | 0.292 | 0.248 | 2556 | 0.721 |
-| MOT20-03 | 313658 | 0.150 | 0.239 | 2595 | 0.696 |
-| MOT20-05 | 646344 | 0.094 | 0.124 | 4252 | 0.722 |
+# VisDrone: WALDO30, прокси по пересекающимся классам
+powershell -ExecutionPolicy Bypass -File data\mot_bench.ps1 -Dataset visdrone `
+  -VisDroneIni data\settings_yolov8_waldo30_visdrone_classes.ini -VisDroneExample 3 -OutDir <dir>
 
-VisDrone2019-MOT-val (OCV DNN CUDA, yolov8l-visdrone, min_area=800):
-
-| Seq | GT | MOTA | IDF1 | IDSW | MOTP (IoU) |
-|---|---|---|---|---|---|
-| uav0000086_00000_v | 23097 | -0.312 | 0.301 | 331 | 0.699 |
-| uav0000117_02622_v | 17279 | -4.128 | 0.091 | 837 | 0.706 |
-| uav0000137_00458_v | 24088 | -2.317 | 0.250 | 1460 | 0.727 |
-| uav0000182_00000_v | 17671 | -0.963 | 0.298 | 239 | 0.718 |
-| uav0000268_05773_v | 13578 | -0.500 | 0.302 | 95 | 0.718 |
-| uav0000305_00000_v | 6391 | -2.748 | 0.272 | 355 | 0.785 |
-| uav0000339_00001_v | 12028 | -1.727 | 0.208 | 334 | 0.719 |
-
-Чтение: MOTP 0.70–0.78 на обеих базах — локализация боксов хорошая.
-Узкое место — recall/FP-дисбаланс детекции:
-
-* MOT20: COCO-модель на плотных толпах находит 30–55% GT-боксов
-  (точки роста: crowd-обученная модель, yolo11m/x, ниже conf).
-* VisDrone: детекции объектов вне разметки GT (минус в MOTA), усиление —
-  min_area/порог conf/фильтрация статики; для осмысленных сравнений
-  конфигураций между собой метрики при фиксации одного и того же набора
-  параметров оценки полностью пригодны.
-
-## 7. Повторение/итерация
-
-1. Поменять `data/settings_*.ini` (модель/бэкенд/пороги) или настройки
-   трекера (раздел `[tracking]`).
-2. Полный прогон: `-Dataset all` (MOT20 ~6 мин + VisDrone ~5.5 мин на RTX
-   4070); только метрики: `-EvalOnly`.
-3. Сравнить `<OutDir>\<dataset>.csv` со строками из этого документа
-   (baseline1) — регрессии видны по MOTA/IDF1/IDSW.
-
-## 8. Визуализация результатов: tools/mot_viz
-
-Интерактивный просмотр прогона поверх видеоряда — для зрительной
-диагностики проблем (дыры recall, ложные детекции, смены ID):
-
-```
-c:\python\python310\python.exe tools\mot_viz\mot_viz.py --res <OutDir>\<seq>.txt
+# VisDrone: WALDO30, все классы (только скорость)
+powershell -ExecutionPolicy Bypass -File data\mot_bench.ps1 -Dataset visdrone `
+  -VisDroneIni data\settings_yolov8_waldo30.ini -VisDroneExample 3 -NoEval -OutDir <dir>
 ```
 
-Видео и GT ищутся автоматически по имени файла результата (layout MOT20
-train и VisDrone2019-MOT-val; при необходимости — `--gt` и
-`--video_pattern`). Отрисовка:
+Параметры прогонов — единые для всех конфигураций:
 
-| Цвет | Что означает |
-|---|---|
-| синий | GT eval-классов (с подписью типа объекта) |
-| оранжевые уголки вокруг синего | GT без пары на этом кадре (FN) |
-| зелёный | детекция, совпавшая с GT по IoU ≥ порога (подпись conf) |
-| красный | непарная детекция, FP (подпись conf) |
-| серый | GT ignore-классов (подавители FP, в матчинге не участвуют) |
+| Прогон | Модель (вход) | Бэкенд / точность | conf | `tracker_type` | `match_type` |
+|---|---|---|---|---|---|
+| MOT20 baseline | YOLO11s COCO person, 736×1280 | TensorRT FP32 | 0.3 | 1 (ByteTrack) | 1 (LAPJV) |
+| VisDrone YOLOv8l | YOLOv8l-visdrone, 960×1280 | TensorRT FP16 | 0.25 | 1 (ByteTrack) | 1 (LAPJV) |
+| VisDrone WALDO30 (пересек. классы) | YOLOv8l-P2, 1024×1024 | TensorRT FP16 | 0.25 | 1 (ByteTrack) | 1 (LAPJV) |
+| VisDrone WALDO30 (все классы) | YOLOv8l-P2, 1024×1024 | TensorRT FP16 | 0.5 | 1 (ByteTrack) | 1 (LAPJV) |
 
-HUD: `<кадр> / <всего>` справа сверху, имя секвенции и счётчики за кадр
-`gt/fn/match/fp/det` слева сверху, легенда цветов внизу. Счётчики за кадр
-сверялись со строками GT/результатов (MOT20-05, кадр 100: gt=193, det=67 —
-точное совпадение с файлами).
+ByteTrack-пороги (явно в ini, одинаковые везде): `bytetrack_track_buffer=30`,
+`bytetrack_track_thresh=0.5`, `bytetrack_high_thresh=0.5`,
+`bytetrack_match_thresh=0.8`. Примечание: `match_type` ByteTrack игнорирует
+(он только для UniversalTracker), но значение держится одинаковым для
+единообразия.
 
-Клавиши: `→`/`←` — кадр вперёд/назад, `Home`/`End` — начало/конец,
-пробел — пауза/автопрокрутка, `Esc`/`q` — выход. Окно ресайзится; `--scale`
-задаёт масштаб (по умолчанию — вписать в 1600×950).
+## 2. Сводные таблицы
 
-Опции: `--iou` (0.5), `--min_area` (по умолчанию — значение датасета:
-VisDrone 800, MOT20 0 — цвета соответствуют тому, что реально посчитано в
-CSV), `--no_labels` (убрать текстовые подписи GT/ignore на плотных сценах,
-conf у детекций остаётся). Для скриптовых проверок: `--dump_frame N
---dump_out file.png` рендерит один кадр в файл без GUI.
+Жирным выделено **лучшее значение в столбце** (↑ — больше лучше, ↓ —
+меньше лучше). `Predictions`/`GT objects` — информационные счётчики, не
+выделяются. Агрегаты по суммарным FP/FN/IDSW/IDTP; MOTP — взвешенный по
+matches; IDF1/IDP/IDR — по суммарным IDTP/IDFP/IDFN.
 
-Оговорка: сопоставление для картинки — жадное по IoU в пределах одного
-кадра; mot_eval дополнительно учитывает непрерывность совпадений между
-кадрами (CONTINUITY-приоритет), поэтому цвета отдельных рамок могут чуть
-расходиться с метриками на кадрах со сменами ID.
+### 2.1 MOT20 (train)
+
+Единственная конфигурация: YOLO11s (COCO, person), 736×1280, TensorRT
+FP32, conf 0.3, ByteTrack. 4 последовательности, 8 931 кадр, 1 134 614
+GT-объектов. Выделять нечего — прогон один.
+
+| Метрика | Значение |
+|---|---:|
+| MOTA | 0.1100 |
+| IDF1 | 0.1509 |
+| IDP | 0.6574 |
+| IDR | 0.0853 |
+| Recall (matches / GT) | 0.1138 |
+| Precision (matches / pred) | 0.8771 |
+| MOTP (IoU) | 0.7615 |
+| IDSW | 1243 |
+| FP | 2970 |
+| FN | 1005542 |
+| Predictions | 147151 |
+
+Тайминги по MOT20 не собираются (`mot_bench.ps1` пишет `*_timing.csv`
+только для VisDrone); грубая оценка полного прогона — ~6 мин.
+
+### 2.2 VisDrone-MOT2019 (val)
+
+Все прогоны: 7 последовательностей, 2 846 кадров, 114 132 GT-объекта;
+общая оценка — классы 1–10, ignore 0/11, `min_area=800`.
+
+**Качество:**
+
+| Прогон | MOTA ↑ | IDF1 ↑ | IDP ↑ | IDR ↑ | Recall ↑ | Precision ↑ | MOTP (IoU) ↑ | IDSW ↓ | FP ↓ | FN ↓ | Predictions |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| YOLOv8l-visdrone, TensorRT FP16 | **0.3576** | **0.4659** | **0.5140** | **0.4261** | **0.5483** | **0.6615** | 0.7471 | 1890 | **19877** | **51549** | 94604 |
+| WALDO30, пересек. классы, conf 0.25 | 0.0856 | 0.3248 | 0.4704 | 0.2481 | 0.2985 | 0.5661 | **0.7678** | **700** | 23607 | 80059 | 60189 |
+
+**Скорость** (полный прогон: чтение кадров + детекция + трекинг + запись
+результата):
+
+| Прогон | Время, с ↓ | ms/кадр ↓ | FPS ↑ |
+|---|---:|---:|---:|
+| YOLOv8l-visdrone, TensorRT FP16 | 175.80 | 61.77 | 16.19 |
+| WALDO30, пересек. классы, conf 0.25 | **158.77** | **55.79** | **17.93** |
+| WALDO30, все классы, conf 0.5 | 159.28 | 55.97 | 17.87 |
+
+**Как читать.** На едином трекере YOLOv8l-visdrone — основная модель на
+VisDrone: она выигрывает по MOTA/IDF1/IDP/IDR/Recall/Precision и по FP/FN.
+Строка WALDO30 — **прокси** (другая таксономия: Person/LightVehicle/Truck/
+Bus/Bike ↔ классы VisDrone; Tricycle/Awning-tricycle покрыты частично), а не
+замена VisDrone-модели. Её превосходство только в MOTP и IDSW — следствие
+консервативного детектора: в ~2 раза меньше recall (0.30 против 0.55),
+меньше и в среднем крупнее матчей (выше IoU) и меньше детекций (меньше смен
+ID).
+
+## 3. Оценка качества тестирования
+
+### 3.1 Замечания
+
+1. **Параметры трекинга теперь едины.** Раньше WALDO30 гонялся на ByteTrack,
+   а YOLOv8l/MOT20 — на UniversalTracker+Hungarian, что делало сравнение по
+   IDSW/IDF1 неатрибутируемым. Исправлено: все прогоны — `tracker_type=1`
+   (ByteTrack) + `match_type=1`, ByteTrack-пороги зафиксированы одинаковыми.
+2. **ByteTrack-пороги vs conf детектора.** При `track_thresh=high_thresh=0.5`
+   детекции с conf ∈ [0.25, 0.5) не открывают новые треки, а только доживают
+   существующие. Эффект виден в цифрах: на VisDrone ByteTrack обрушил FP
+   (240 578 → 19 877) и поднял MOTA до +0.36, но на MOT20 recall упал
+   0.28 → 0.11 (низкоуверенные детекции толпы перестали открывать треки).
+   Пороги — осознанный дефолт; тюнинг — отдельная итерация (см. раздел 4).
+3. **`min_area=800` не влияет на трекер.** Фильтр срабатывает только в
+   `mot_eval`, поэтому трекер ведёт и пишет все мелкие детекции: завышает
+   `Predictions`, время и IDSW.
+4. **MOTP — не мера локализации при сравнении моделей с разным числом
+   матчей.** У WALDO30 MOTP (IoU) выше, потому что он матчит меньше и в
+   среднем более крупные/чистые боксы — смещение выборки, а не точность рамок.
+5. **Устаревший комментарий `MatchBipart`.** В большинстве `settings_*.ini`
+   вне бенчмарка остаётся комментарий `MatchHungrian = 0 / MatchBipart = 1`,
+   хотя энума `MatchBipart` больше нет (реально `MatchLAPJV = 1`). В
+   бенчмарк-конфигах (`settings_mot20.ini`, `settings_visdrone_trt_fp16.ini`)
+   исправлено.
+
+### 3.2 Неполнота
+
+* MOT20 прогнан в одной конфигурации — сравнивать на MOT20 нечего, это
+  чистый baseline без точек сравнения.
+* Нет HOTA/AssA: IDF1/IDSW есть, но оценка качества ассоциации неполна.
+* Нет систематического среза по conf × min_area × NMS: выбран один
+  operating point, «лучшая» конфигурация не подкреплена кривой
+  Precision–Recall или HOTA.
+* Нет таймингов по MOT20 (см. 2.1).
+
+## 4. Что улучшить, чтобы поднять показатели
+
+1. **MOT20 — поднять recall (главный ограничитель, сейчас ~0.11).** COCO-модель
+   находит лишь ~11 % GT; ByteTrack с порогами 0.5 усугубил это (см. п.3).
+   Точки роста: crowd-обученная модель (MOT20/CrowdHuman), yolo11m/x, conf
+   ниже 0.3, SAHI-нарезка, и согласование `track_thresh`/`high_thresh` с conf.
+2. **VisDrone — добить FP при сохранении recall.** ByteTrack уже срезал FP в
+   ~12 раз (240 578 → 19 877), но остаются FP от неразмеченных мелких объектов:
+   поднять conf с 0.25, поднять `min_area` и отфильтровать мелкие объекты
+   **в самом трекере** (а не только в метриках), тюнинг NMS.
+3. **Тюнинг ByteTrack-порогов.** `track_thresh=high_thresh=0.5` при conf
+   0.25–0.3 «отрезает» низкоуверенные детекции от открытия новых треков (на
+   MOT20 это −17 п.п. recall). Прогнать сетку `track_thresh`/`high_thresh`
+   (например 0.25/0.4 или 0.3/0.5) и `match_thresh` (0.8 → 0.5–0.7 для мелких
+   быстрых объектов VisDrone) и выбрать по HOTA.
+4. **Добавить HOTA и проварьировать operating point.** Проварьировать
+   conf × min_area × NMS и выбирать конфигурацию по кривой (PR/HOTA), а не
+   по единственной точке.
