@@ -272,6 +272,46 @@ struct TrackerSettings
     ClipSettings m_clipSettings;
 
     ///
+    /// \brief PostProcessSettings
+    /// Optional classifier / VSR post-processing of tracks (demo pipeline:
+    /// yolo11s-cls on raw crops or on VSR-restored crops, plus an MSP-based
+    /// OOD gate). Filled from the [postprocess] section of the settings ini.
+    ///
+    struct PostProcessSettings
+    {
+        bool m_enable = false;
+
+        /// 0 = classifier on raw crops, 1 = VSR + classifier
+        int m_variant = 0;
+
+        /// Closed-set classifier engine (TensorRT) and its class-name list.
+        std::string m_clsEngine;
+        std::string m_clsNames;
+        int m_clsSize = 224;
+
+        /// VSR engine (fixed K), crop size and the frame used for the result.
+        std::string m_vsrEngine;
+        int m_vsrK = 5;
+        int m_vsrLrSize = 64;
+        int m_vsrTargetFrame = -1; // -1 => K/2
+
+        /// MSP threshold: tracks below it are treated as false positives.
+        /// 0 disables the OOD gate.
+        float m_mspThreshold = 0.0f;
+
+        /// How often a track is re-classified (frames).
+        int m_recheckInterval = 1;
+
+        /// Objects smaller than this (both sides, px) are not classified.
+        int m_minObjectSide = 8;
+
+        /// Optional per-frame CSV dump of classifier decisions.
+        std::string m_dumpPath;
+    };
+
+    PostProcessSettings m_postProcessSettings;
+
+    ///
     struct EmbeddingParams
     {
         ///

@@ -64,6 +64,36 @@ VideoExample::VideoExample(const cv::CommandLineParser& parser)
     std::string settingsFile = parser.get<std::string>("settings");
     m_trackerSettingsLoaded = ParseTrackerSettings(settingsFile, m_trackerSettings);
 
+#ifdef USE_VSR
+    if (m_trackerSettingsLoaded && m_trackerSettings.m_postProcessSettings.m_enable)
+    {
+        const TrackerSettings::PostProcessSettings& s = m_trackerSettings.m_postProcessSettings;
+
+        TrackPostProcessor::Settings ps;
+        ps.m_enable = s.m_enable;
+        ps.m_variant = s.m_variant;
+        ps.m_clsEngine = s.m_clsEngine;
+        ps.m_clsNames = s.m_clsNames;
+        ps.m_clsSize = s.m_clsSize;
+        ps.m_vsrEngine = s.m_vsrEngine;
+        ps.m_vsrK = s.m_vsrK;
+        ps.m_vsrLrSize = s.m_vsrLrSize;
+        ps.m_vsrTargetFrame = s.m_vsrTargetFrame;
+        ps.m_mspThreshold = s.m_mspThreshold;
+        ps.m_recheckInterval = s.m_recheckInterval;
+        ps.m_minObjectSide = s.m_minObjectSide;
+        ps.m_dumpPath = s.m_dumpPath;
+
+        m_postProcessor = std::make_unique<TrackPostProcessor>();
+        std::string postError;
+        if (!m_postProcessor->Init(ps, &postError))
+        {
+            m_logger->error("TrackPostProcessor init failed: {}", postError);
+            m_postProcessor.reset();
+        }
+    }
+#endif
+
 	if (m_batchSize > 1)
 	{
 		m_frameInfo[0].SetBatchSize(m_batchSize);
@@ -546,6 +576,13 @@ void VideoExample::Tracking(FrameInfo& frame)
 		m_tracker->Update(frame.m_regions[i], frame.m_frames[i].GetUMatBGR(), frame.m_frameTimeStamps[i]);
 		m_tracker->GetTracks(frame.m_tracks[i]);
 
+#ifdef USE_VSR
+		if (m_postProcessor && m_postProcessor->Enabled())
+		{
+			m_postProcessor->Process(frame.m_frames[i].GetMatBGR(), frame.m_frameInds[i], frame.m_tracks[i]);
+		}
+#endif
+
 		m_cvatAnnotationsGenerator.NewDetects(frame.m_frameInds[i], frame.m_tracks[i], 0);
 		m_motResultsWriter.NewDetects(frame.m_frameInds[i], frame.m_tracks[i], 0);
 	}
@@ -651,8 +688,8 @@ void VideoExample::DrawTrack(cv::Mat frame,
     label << track.m_ID.ID2Str();
     if (track.m_type != bad_type)
         label << ": " << TypeConverter::Type2Str(track.m_type);
-    else if (!userLabel.empty())
-        label << ": " << userLabel;
+    if (!userLabel.empty())
+        label << (track.m_type != bad_type ? " | " : ": ") << userLabel;
     if (track.m_confidence > 0)
         label << ", " << std::fixed << std::setw(2) << std::setprecision(2) << track.m_confidence;
 #if 0

@@ -124,6 +124,21 @@ bool ParseTrackerSettings(const std::string& settingsFile, TrackerSettings& trac
                 trackerSettings.m_clipSettings.m_labels.push_back(clipLabel);
         }
 
+        // Read post-processing (classifier / VSR) settings
+        trackerSettings.m_postProcessSettings.m_enable = reader.GetInteger("postprocess", "enable", 0) != 0;
+        trackerSettings.m_postProcessSettings.m_variant = reader.GetInteger("postprocess", "variant", 0);
+        trackerSettings.m_postProcessSettings.m_clsEngine = reader.GetString("postprocess", "cls_engine", "");
+        trackerSettings.m_postProcessSettings.m_clsNames = reader.GetString("postprocess", "cls_names", "");
+        trackerSettings.m_postProcessSettings.m_clsSize = reader.GetInteger("postprocess", "cls_size", 224);
+        trackerSettings.m_postProcessSettings.m_vsrEngine = reader.GetString("postprocess", "vsr_engine", "");
+        trackerSettings.m_postProcessSettings.m_vsrK = reader.GetInteger("postprocess", "vsr_k", 5);
+        trackerSettings.m_postProcessSettings.m_vsrLrSize = reader.GetInteger("postprocess", "vsr_lr_size", 64);
+        trackerSettings.m_postProcessSettings.m_vsrTargetFrame = reader.GetInteger("postprocess", "vsr_target_frame", -1);
+        trackerSettings.m_postProcessSettings.m_mspThreshold = static_cast<float>(reader.GetReal("postprocess", "msp_threshold", 0.0));
+        trackerSettings.m_postProcessSettings.m_recheckInterval = reader.GetInteger("postprocess", "recheck_interval", 1);
+        trackerSettings.m_postProcessSettings.m_minObjectSide = reader.GetInteger("postprocess", "min_object_side", 8);
+        trackerSettings.m_postProcessSettings.m_dumpPath = reader.GetString("postprocess", "dump", "");
+
     res = true;
     std::cout << "ParseTrackerSettings: " << res << std::endl;
     return res;

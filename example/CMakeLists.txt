@@ -11,6 +11,11 @@ set(HEADERS MouseExample.h
             MotionDetectorExample.h
             FileLogger.h)
 
+if (USE_VSR)
+    set(SOURCES ${SOURCES} YoloCls.cpp TrackPostProcessor.cpp)
+    set(HEADERS ${HEADERS} YoloCls.h TrackPostProcessor.h)
+endif(USE_VSR)
+
 if (BUILD_CARS_COUNTING)
     set(SOURCES ${SOURCES} CarsCounting.cpp)
     set(HEADERS ${HEADERS} CarsCounting.h)
@@ -53,6 +58,26 @@ endif(USE_CLIP)
 if (USE_GEOGRAPHICLIB)
     set(LIBS ${LIBS} GeographicLib::GeographicLib)
 endif(USE_GEOGRAPHICLIB)
+
+# ---------------------------------------------------------------------------
+# Optional classifier/VSR post-processing (demo pipeline).
+# Links the vsr_inference static library and the TensorRT/CUDA headers needed
+# by the yolo11s-cls TensorRT runner. VSR_INFERENCE_DIR points at the
+# cpp/vsr_inference install prefix (include/ + lib/).
+# ---------------------------------------------------------------------------
+if (USE_VSR)
+    add_definitions(-DUSE_VSR)
+    set(VSR_INFERENCE_DIR "C:/work/diss/cpp/install" CACHE PATH "vsr_inference install prefix")
+    set(TRT_INCLUDE_DIR "C:/work/libraries/cuda/TensorRT-10.16.1.11/include" CACHE PATH "TensorRT include dir")
+    set(CUDA_INCLUDE_DIR "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2/include" CACHE PATH "CUDA include dir")
+
+    include("${VSR_INFERENCE_DIR}/lib/cmake/vsr_inference/vsr_inference_targets.cmake")
+
+    INCLUDE_DIRECTORIES("${VSR_INFERENCE_DIR}/include"
+                        "${TRT_INCLUDE_DIR}"
+                        "${CUDA_INCLUDE_DIR}")
+    set(LIBS ${LIBS} vsr::vsr_inference)
+endif(USE_VSR)
 
 ADD_EXECUTABLE(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 

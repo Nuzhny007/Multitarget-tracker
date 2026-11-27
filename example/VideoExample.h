@@ -14,6 +14,10 @@
 #include "cvatAnnotationsGenerator.h"
 #include "motResultsWriter.h"
 
+#ifdef USE_VSR
+#include "TrackPostProcessor.h"
+#endif
+
 #include "spdlog/spdlog.h"
 #include "spdlog/async.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
@@ -278,6 +282,10 @@ protected:
 
     TrackerSettings m_trackerSettings;
     bool m_trackerSettingsLoaded = false;
+
+#ifdef USE_VSR
+    std::unique_ptr<TrackPostProcessor> m_postProcessor;
+#endif
 
     std::vector<cv::Scalar> m_colors;
 

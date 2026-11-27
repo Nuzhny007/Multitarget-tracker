@@ -511,7 +511,23 @@ protected:
                 0.5f,                        // Minimal ratio raw_trajectory_points / trajectory_lenght
                 cv::Size2f(0.1f, 8.0f), 2))      // Min and max ratio: width / height
 			{
+#ifdef USE_VSR
+				std::string postLabel;
+				if (m_postProcessor && m_postProcessor->Enabled())
+				{
+					const std::string& l = m_postProcessor->Label(track.m_ID.m_val);
+					if (!l.empty())
+					{
+						std::stringstream ps;
+						ps << l << " " << std::fixed << std::setprecision(2)
+						   << m_postProcessor->Msp(track.m_ID.m_val);
+						postLabel = ps.str();
+					}
+				}
+				DrawTrack(frame, track, true, framesCounter, postLabel);
+#else
 				DrawTrack(frame, track, true, framesCounter);
+#endif
 
 				std::stringstream label;
 				label << TypeConverter::Type2Str(track.m_type) << " " << std::setprecision(2) << track.m_velocity << ": " << track.m_confidence;
