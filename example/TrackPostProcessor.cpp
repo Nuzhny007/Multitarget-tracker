@@ -74,6 +74,7 @@ void TrackPostProcessor::Process(const cv::Mat& frameBGR, int frameInd,
         const cv::Rect box = track.m_rrect.boundingRect();
         const track_id_t::value_type key = track.m_ID.m_val;
         TrackState& st = m_tracks[key];
+        st.m_lastSeen = frameInd;
 
         bool updated = false;
         if (box.width >= m_settings.m_minObjectSide &&
@@ -131,7 +132,7 @@ void TrackPostProcessor::Process(const cv::Mat& frameBGR, int frameInd,
     {
         for (auto it = m_tracks.begin(); it != m_tracks.end();)
         {
-            if (frameInd - it->second.m_lastFrame > 300)
+            if (frameInd - it->second.m_lastSeen > 300)
                 it = m_tracks.erase(it);
             else
                 ++it;

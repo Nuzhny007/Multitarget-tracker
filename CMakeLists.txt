@@ -102,6 +102,16 @@ if (USE_CLIP)
     add_definitions(-DUSE_CLIP)
 endif(USE_CLIP)
 
+# ---------------------------------------------------------------------------
+# VSR post-processing (optional): re-score/refine track classes with a
+# closed-set classifier on raw or VSR-restored object crops (demo pipeline,
+# see example/TrackPostProcessor.*). Requires the external vsr_inference
+# package (target vsr::vsr_inference) plus TensorRT/CUDA. Point CMake at the
+# install prefix with -DVSR_INFERENCE_DIR=<prefix>; only wired into the
+# example app, so it has no effect unless BUILD_EXAMPLES is ON.
+# ---------------------------------------------------------------------------
+option(USE_VSR "Enable classifier/VSR track post-processing (requires installed vsr_inference package)" OFF)
+
 if (BUILD_EXAMPLES)
     add_subdirectory(example)
 endif(BUILD_EXAMPLES)

@@ -68,7 +68,8 @@ private:
         std::string m_label;
         int m_clsIndex = -1;
         float m_msp = -1.f;
-        int m_lastFrame = -1000000;
+        int m_lastFrame = -1000000;    // last frame a classification was attempted
+        int m_lastSeen = -1;           // last frame the track was observed (GC)
         bool m_rejected = false;
     };
 

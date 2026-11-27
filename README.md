@@ -7,6 +7,7 @@
 
 ## Latest Features
 
+- VSR (video super-resolution) + closed-set classifier track post-processing: refine classes and filter false positives after ByteTrack (demo pipeline, `-DUSE_VSR=ON`, see the section below)
 - Add geographiclib for vehicles speed estimation [geographiclib/geographiclib](https://github.com/geographiclib/geographiclib)
 - Add YOLOE detection support [THU-MIG/yoloe](https://github.com/THU-MIG/yoloe)
 - Add new SOTA: YOLOv26, YOLOv26-obb and YOLOv26-seg models from [ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)
@@ -117,6 +118,34 @@ directory, prompts, backend, FP16, a catch-all `reject_label`, a confidence
 `threshold` and the per-track `recheck_interval`. Pass it with
 `--settings=../data/settings_motion_clip.ini`; without `model_dir`/`labels` the
 classification stays disabled even when built with `USE_CLIP=ON`.
+
+#### Optional: VSR + classifier track post-processing
+
+A demo post-processor that runs **after ByteTrack** and re-scores each track with
+a closed-set classifier (`yolo11s-cls`) on the detector crop — either the raw
+crop (`variant=0`) or the crop restored by a K-frame video-super-resolution (VSR)
+engine (`variant=1`) — then drops tracks whose max-softmax confidence is below an
+OOD threshold. It can refine classes and remove false positives from the output;
+the tracker itself is left untouched.
+
+Build with `-DUSE_VSR=ON`. It links the external `vsr_inference` package
+(`vsr::vsr_inference`) and needs TensorRT/CUDA:
+
+```bash
+cmake . .. -DUSE_VSR=ON \
+  -DVSR_INFERENCE_DIR=<vsr_inference install prefix> \
+  -DTRT_INCLUDE_DIR=<TensorRT include dir> -DCUDA_INCLUDE_DIR=<CUDA include dir>
+```
+
+Settings live in the `[postprocess]` section of the ini file (see
+[`data/settings_visdrone_yolo11s.ini`](data/settings_visdrone_yolo11s.ini)):
+`variant`, `cls_engine`/`cls_names`/`cls_size`, `vsr_engine`/`vsr_k`/`vsr_lr_size`/
+`vsr_target_frame`, `msp_threshold`, `recheck_interval`, `min_object_side`, `dump`.
+`enable = 0` keeps the plain detector + ByteTrack baseline.
+
+Note: the `vsr_inference` header documents the crop layout as HWC, but the
+TensorRT graph is exported as `[1,K,3,H,W] -> [1,K,3,4H,4W]` (planar CHW per
+frame); `TrackPostProcessor` packs/reads CHW accordingly.
 
 
 ### Usage Guide

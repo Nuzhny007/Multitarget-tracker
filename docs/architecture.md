@@ -11,6 +11,7 @@
 ```text
 кадр -> детектор (движение / OpenCV DNN / TensorRT) -> регионы (CRegion)
       -> трекер (сопоставление + фильтр Калмана + траектория) -> TrackingObject
+      -> [постпроцессор: классификация кропов + VSR, OOD-фильтр] (опционально)
       -> визуализация / логи / подсчёт / геопривязка
 ```
 
@@ -106,6 +107,8 @@ graph TD
     APP1 --> SPD[spdlog]
     APP2 --> SPD
     APP1 --> GEO[GeographicLib optional]
+    APP1 --> PP[TrackPostProcessor + YoloCls, USE_VSR]
+    PP --> VSR[vsr_inference + TensorRT/CUDA]
     PY --> PB[pybind11]
 ```
 
@@ -120,6 +123,11 @@ graph TD
 * **Детекторы** не зависят от трекера, но зависят от `src/mtracking`.
 * **`example`** и **`async_detector`** знают детали обеих библиотек (включая
   `FrameInfo`, `Frame`, логгеры), т.е. приложения тесно связаны с реализацией.
+* **Постпроцессор треков** (`example/TrackPostProcessor.*` + `example/YoloCls.*`)
+  — отдельный слой только в `example/` (опция `USE_VSR`): после трекера он
+  классифицирует кропы объектов закрытым классификатором (raw или
+  VSR-восстановленным) и фильтрует ложные сработки по MSP. В `async_detector`
+  и `pymtracking` он не включён.
 * **`tensorrt_onnx`** — по сути отдельный вендоренный SDK (включая
   `common/sample*.cpp` из TensorRT samples), живущий внутри `src/Detector`.
 
@@ -162,6 +170,7 @@ graph TD
 | `USE_OCV_UKF` | OFF | Unscented Kalman из contrib |
 | `USE_OCV_EMBEDDINGS` | ON | ReID-эмбеддинги через `cv::dnn` |
 | `USE_CLIP` | OFF | классификация в примере motion через внешний пакет `ruCLIP` (`find_package(ruCLIP CONFIG)`, цель `ruclip::ruclip`) |
+| `USE_VSR` | OFF | постпроцессор треков в `example/`: классификатор (`YoloCls`) по raw/VSR-восстановленным кропам + OOD-фильтр; требует внешний пакет `vsr::vsr_inference` и TensorRT/CUDA (`-DVSR_INFERENCE_DIR=…`) |
 | `USE_GEOGRAPHICLIB` | OFF | `GeographicLib::LocalCartesian` для ENU |
 | `SILENT_WORK` | OFF | вырезает `imshow`/`waitKey` |
 
@@ -486,11 +495,43 @@ ONNX/TensorRT-бэкендом не поддерживаются: `YoloONNXImpl:
 Для сегментационных моделей заполняется `Result::m_boxMask`, который затем
 попадает в `CRegion::m_boxMask` и используется при отрисовке/карте движения.
 
+### 7.5 Постпроцессор треков (классификатор + VSR)
+
+Опциональный слой **только в `example/`** (опция `USE_VSR`), работающий после
+трекера. Состоит из `TrackPostProcessor` (управление состоянием треков,
+кропы, OOD-фильтр) и `YoloCls` (минимальный TensorRT-раннер закрытого
+классификатора, например `yolo11s-cls`). На каждый кадр:
+
+1. для каждого `TrackingObject` берётся квадратное окно вокруг bbox
+   (`MakeWindow`: сторона `max(lr_size, 1.25·max(w,h))`, ограничено кадром);
+2. **variant 0** — классификация «сырого» окна; **variant 1** — окно
+   уменьшается до `lr_size`, кладётся в скользящий буфер из последних K кропов
+   трека, буфер подаётся в VSR-движок, и классифицируется средний (или
+   `vsr_target_frame`) восстановленный кадр;
+3. результат (`clsIndex`, метка, MSP = max softmax) кэшируется в состоянии
+   трека и пересчитывается раз в `recheck_interval` кадров;
+4. треки, у которых кэшированный MSP ниже `msp_threshold`, удаляются из
+   выходного вектора (ложные сработки), но внутреннее состояние трекера не
+   трогается.
+
+`YoloCls::Classify` воспроизводит препроцессинг ultralytics classify: ресайз
+до `cls_size` (bilinear), RGB, /255 (без ImageNet mean/std), вывод — softmax
+над логитами. Для variant 1 VSR-выход уже RGB, поэтому классификатор
+вызывается без swapRB; для variant 0 окно BGR — со swapRB.
+
+Раскладка VSR-графа — `[1,K,3,H,W] -> [1,K,3,4H,4W]` (планарный CHW на кадр),
+хотя заголовок `vsr_inference.h` декларирует HWC; `TrackPostProcessor`
+упаковывает/читает данные планарно (CHW) и это подтверждено проверкой формы
+в `backend_tensorrt.cpp` внешней библиотеки. Прочие параметры: `vsr_k`
+(число кадров, фиксировано в экспортированном графе), `vsr_lr_size`,
+`vsr_target_frame` (по умолчанию K/2), `min_object_side` (меньшие объекты не
+классифицируются), `dump` (опциональный CSV-дамп решений).
+
 ## 8. Конфигурация
 
 ### 8.1 INI
 
-`ParseTrackerSettings` (`src/Tracker/TrackerSettings.cpp`) читает два раздела:
+`ParseTrackerSettings` (`src/Tracker/TrackerSettings.cpp`) читает три раздела:
 
 ```ini
 [detection]
@@ -506,6 +547,11 @@ match_type, use_aceleration, delta_time, accel_noise, dist_thresh,
 local_cartesian_dist_thresh, min_area_radius_pix, min_area_radius_k,
 max_lost_time, max_trace_len, detect_abandoned, min_static_time,
 max_static_time, max_speed_for_static, bytetrack_*
+
+[postprocess]
+enable, variant, cls_engine, cls_names, cls_size, vsr_engine, vsr_k,
+vsr_lr_size, vsr_target_frame, msp_threshold, recheck_interval,
+min_object_side, dump
 ```
 
 Пустой/отсутствующий файл => `false`, используются значения по умолчанию.
@@ -536,7 +582,8 @@ INI-файлы лежат в `data/` (`settings*.ini`), часть из них �
 
 ```text
 capture -> detector.Detect(batch) -> tracker.Update(каждый кадр батча)
-        -> GetTracks -> draw/log -> VideoWriter -> imshow/waitKey
+        -> GetTracks -> [postProcess: классификация + OOD-фильтр] (USE_VSR)
+        -> draw/log -> VideoWriter -> imshow/waitKey
 ```
 
 Один поток, поддерживается батч (`--batch_size`) на уровне детектора.
@@ -545,7 +592,8 @@ capture -> detector.Detect(batch) -> tracker.Update(каждый кадр бат
 
 ```text
 [CaptureAndDetect] capture + detect -> FrameInfo[2] (double buffer)
-[main]             wait(m_captured) -> tracker.Update -> draw/write -> release
+[main]             wait(m_captured) -> tracker.Update
+                   -> [postProcess] (USE_VSR) -> draw/write -> release
 ```
 
 Синхронизация — `std::mutex` + `std::condition_variable` + `std::atomic<bool>
@@ -663,4 +711,6 @@ Python-обёртка, `async_detector`, `BUILD_CARS_COUNTING`, `BUILD_ONNX_TENS
 | `src/Detector/ONNXTensorRTDetector.*`, `tensorrt_onnx/*` | TensorRT-детектор |
 | `src/python_bind/mtracker.cpp` | pybind11-модуль |
 | `async_detector/*` | 4-поточный пример |
+| `example/TrackPostProcessor.*` | постпроцессор треков: классификация кропов + VSR, OOD-фильтр (опция `USE_VSR`) |
+| `example/YoloCls.*` | минимальный TensorRT-раннер закрытого классификатора (`USE_VSR`) |
 | `example/*` | основное приложение, примеры, CSV/CVAT-логи |
