@@ -1,7 +1,8 @@
 #include <iomanip>
-#include <ctime>
 
 #include "VideoExample.h"
+#include "util/Logger.h"
+#include "util/Palette.h"
 
 ///
 /// \brief VideoExample::VideoExample
@@ -22,44 +23,11 @@ VideoExample::VideoExample(const cv::CommandLineParser& parser)
     m_useContrastAdjustment = parser.get<int>("contrast_adjustment") != 0;
     m_noShow = parser.get<int>("no_show") != 0;
 
-    m_colors.emplace_back(255, 0, 0);
-    m_colors.emplace_back(0, 255, 0);
-    m_colors.emplace_back(0, 0, 255);
-    m_colors.emplace_back(255, 255, 0);
-    m_colors.emplace_back(0, 255, 255);
-    m_colors.emplace_back(255, 0, 255);
-    m_colors.emplace_back(255, 127, 255);
-    m_colors.emplace_back(127, 0, 255);
-    m_colors.emplace_back(127, 0, 127);
+    m_colors = mtutil::DefaultPalette();
 
     m_resultsLog.Open();
 
-    // Create loggers
-    m_consoleSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    m_consoleSink->set_level(spdlog::level::from_str(m_showLogsLevel));
-    m_consoleSink->set_pattern("[%^%l%$] %v");
-
-    auto currentTime = std::chrono::system_clock::now();
-    auto transformed = currentTime.time_since_epoch().count() / 1000000;
-    std::time_t tt = std::chrono::system_clock::to_time_t(currentTime);
-    char buffer[80];
-#ifdef WIN32
-    tm timeInfo;
-    localtime_s(&timeInfo, &tt);
-    strftime(buffer, 80, "%G%m%d_%H%M%S", &timeInfo);
-#else
-    auto timeInfo = localtime(&tt);
-    strftime(buffer, 80, "%G%m%d_%H%M%S", timeInfo);
-#endif
-
-    size_t max_size = 1024 * 1024 * 5;
-    size_t max_files = 3;
-    m_fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>("logs/" + std::string(buffer) + std::to_string(transformed % 1000) + ".txt", max_size, max_files);
-    m_fileSink->set_level(spdlog::level::from_str(m_showLogsLevel));
-
-    m_logger = std::shared_ptr<spdlog::logger>(new spdlog::logger("traffic", { m_consoleSink, m_fileSink }));
-    m_logger->set_level(spdlog::level::from_str(m_showLogsLevel));
-    m_logger->info("Start service");
+    m_logger = mtutil::CreateLogger("traffic", m_showLogsLevel);
 
     std::string settingsFile = parser.get<std::string>("settings");
     m_trackerSettingsLoaded = ParseTrackerSettings(settingsFile, m_trackerSettings);
@@ -108,7 +76,7 @@ VideoExample::VideoExample(const cv::CommandLineParser& parser)
         fr.SetUseAdjust(m_useContrastAdjustment);
     }
 
-    m_startTimeStamp = currentTime;
+    m_startTimeStamp = std::chrono::system_clock::now();
 }
 
 ///
@@ -380,8 +348,6 @@ void VideoExample::AsyncProcess()
 				}
 				if (key == 'm' || key == 'M')
 					manualMode = !manualMode;
-				else
-					break;
 			}
 #else
 			//std::this_thread::sleep_for(std::chrono::milliseconds(1));

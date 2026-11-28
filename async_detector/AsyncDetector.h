@@ -31,6 +31,8 @@ struct FrameInfo
 	std::vector<TrackingObject> m_tracks;
     time_point_t m_frameTimeStamp;
 	int64 m_dt = 0;
+	int64 m_detectDt = 0;   // detector time for this frame, clock ticks
+	int64 m_trackDt = 0;    // tracker time for this frame, clock ticks
 	size_t m_frameInd = 0;
 
 	static constexpr int StateNotProcessed = 0;
@@ -83,7 +85,5 @@ private:
     static void DetectThread(const config_t& config, cv::Mat firstFrame, FramesQueue* framesQue, std::atomic<bool>* stopFlag);
 	static void TrackingThread(const TrackerSettings& settings, FramesQueue* framesQue, float fps, std::atomic<bool>* stopFlag);
 
-    std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> m_consoleSink;
-    std::shared_ptr<spdlog::sinks::rotating_file_sink_mt> m_fileSink;
     std::shared_ptr<spdlog::logger> m_logger;
 };

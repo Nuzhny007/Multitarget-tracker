@@ -665,8 +665,8 @@ private:
 
 	LocalPlane m_plane;
 
-	cv::Matx<double, 3, 3> m_toGround;   // Frame pixels -> local plane (meters)
-	cv::Matx<double, 3, 3> m_toPix;      // Local plane (meters) -> frame pixels
+	cv::Matx<double, 3, 3> m_toGround = cv::Matx<double, 3, 3>::eye();   // Frame pixels -> local plane (meters)
+	cv::Matx<double, 3, 3> m_toPix = cv::Matx<double, 3, 3>::eye();      // Local plane (meters) -> frame pixels
 
 	bool m_valid = false;
 
@@ -678,7 +678,10 @@ private:
     ///
     struct Pix2MapParams
     {
-        cv::Matx<double, 3, 3> m_toPix;
+        // Identity, not uninitialized garbage, until Init() succeeds; on a
+        // failed Init() m_valid stays false and Ground2Pix() is disabled
+        // (roadmap M17).
+        cv::Matx<double, 3, 3> m_toPix = cv::Matx<double, 3, 3>::eye();
         bool m_valid = false;
 
         ///

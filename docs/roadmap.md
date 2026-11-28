@@ -30,6 +30,20 @@
 > OOD-фильтром по MSP для отсеивания ложных сработок. Реализация —
 > `example/TrackPostProcessor.*` и `example/YoloCls.*`, настройки — секция
 > `[postprocess]` INI; описание — `docs/architecture.md` §7.5.
+>
+> **Дополнение (2026-11-27).** Закрыт блок P2 «надёжность/численные методы»:
+> M7, M9–M11, M13–M15, M46, M47 — карточки перенесены в
+> `docs/roadmap-archive.md`.
+>
+> **Дополнение (2026-11-27).** Закрыт блок P2 «результат/надёжность»:
+> M6, M8, M12, M16–M19 — карточки перенесены в `docs/roadmap-archive.md`.
+> M3 (копирование траекторий в `GetTracks`) остаётся открытым: корректный
+> фикс требует смены публичного типа на `shared_ptr<const Trace>`.
+>
+> **Дополнение (2026-11-27).** Начат этап M2: выполнены фазы 1–4
+> (`DetectorSettings` + версия схемы INI; реестры детекторов/трекеров;
+> публичный API/install-граница + `MT_API`; общие утилиты `src/util`).
+> План по фазам и статус — `docs/m2-refactoring-plan.md`.
 
 ## 1. Легенда приоритетов
 
@@ -60,20 +74,6 @@
 | ID | Приоритет | Кратко | Где |
 |---|---|---|---|
 | **M3** | P2 | `GetTracks` копирует все траектории (часть про `CalcEmbeddins` уже исправлена) | `BaseTracker.cpp:97-107`, `track.cpp:689-701` |
-| **M6** | P2 | `DrawFilledRect`: `color[3]` при 4-канальном кадре и арифметика указателя при `rect.x >= cols` | `src/mtracking/defines.h:361-385` |
-| **M7** | P2 | `nms/nms2/nms3`: деление на нулевую площадь объединения → NaN | `src/mtracking/nms.h:48-49,116-117,191-192` |
-| **M8** | P2 | `WidthDist`/`HeightDist`: деление на 0 при нулевом размере | `src/Tracker/track.cpp:490-509` |
-| **M9** | P2 | `TrackingObject::IsRobust` при пустой траектории: `size()-1` (underflow) и `0/0` → NaN | `src/Tracker/trajectory.h:260-284` |
-| **M10** | P2 | `LeastSquarespoly2/2`: параметр `count` используется как конечный индекс; `sqrt` от отрицательного → NaN | `src/Tracker/trajectory.h:304-396` |
-| **M11** | P2 | `BaseDetector::UpdateIgnoreMask`: отрицательный размер ROI при выходе за кадр | `src/Detector/BaseDetector.h:118-132` |
-| **M12** | P2 | `BackgroundSubtract::Init` «успешно» возвращает `true` после fallback на VIBE; ошибки не видны вызывающему | `src/Detector/BackgroundSubtract.cpp:19-197` |
-| **M13** | P2 | `std::stoi/stof` по значениям INI/KeyVal без `try/catch` → необработанное исключение | `MotionDetector.cpp:39`, `TrackerSettings.cpp`, `ONNXTensorRTDetector.cpp:50-63` |
-| **M14** | P2 | `m_writeEachNFrame == 0` → деление на 0 при логировании | `example/FileLogger.h:113,149` |
-| **M15** | P2 | `logs/` не создаётся в `VideoExample` → `rotating_file_sink` бросает исключение при старте (в `async_detector` каталог создаётся) | `example/VideoExample.cpp:55` |
-| **M16** | P2 | `CarsCounting::RemoveLine` всегда возвращает `false`, даже удалив линию | `example/CarsCounting.cpp:391-401` |
-| **M17** | P2 | `GeoParams::Pix2MapParams::Init`: при неудаче `m_toPix` остаётся неинициализированной | `example/CarsCounting.h:507-521` |
-| **M18** | P2 | `VideoExample::AsyncProcess`: при `batch_size > 1` отображается/обрабатывается только первый кадр батча | `example/VideoExample.cpp:309-328` |
-| **M19** | P2 | `AsyncDetector` измеряет не время обработки, а ожидание в очереди | `async_detector/AsyncDetector.cpp:77-90` |
 | **M27** | P3 | `CTrack` ctor №1 смещает первую точку траектории на `height/2`, ctor №2 — нет | `track.cpp:55` vs `110` |
 | **M31** | P3 | `TrackID::ID2Module(0)` → деление на 0; `Str2ID` бросает `std::invalid_argument` | `defines.h:53-64` |
 | **M32** | P3 | `TrackerSettings::EmbeddingParams` использует `assert` в конструкторе (в Release не проверяет) | `TrackerSettings.h:216-224` |
@@ -88,8 +88,6 @@
 | **M43** | P3 | `GetTrajectory` возвращает `vector<cv::Point>` (округление), теряя субпиксельную точность | `trajectory.h:290-298` |
 | **M44** | P3 | `GetTracks` в `BYTETracker` строит `RotatedRect` из 3 точек — NaN при вырожденном прямоугольнике | `BYTETracker.cpp:34`, `defines.h:185-193` |
 | **M45** | P3 | `AsyncDetector`/`VideoExample` дублируют код логгеров, отрисовки, CLI | `async_detector/*`, `example/*` |
-| **M46** | P2 | Авто-определение входа по 4D-выходу (`DetectionOutput`) даёт `N×7` вместо размера сети; из-за дефолта `608` ветка обычно мертва | `OCVDNNDetector.cpp:282-327`, `OCVDNNDetector.h:68-69` |
-| **M47** | P2 | `VerifyOutputAspectRatio` удаляет имена выходов из `m_params` во время обхода, а `m_outpuDims` не привязаны к именам → после удаления данные читаются как чужие тензоры | `YoloONNX.cpp:29-66,479-505` |
 
 ---
 
@@ -118,10 +116,6 @@ M1, M2, M4, M5 и часть M3 (`CalcEmbeddins`) исправлены 2026-11-1
   закрывает оставшиеся NaN-ы и мусорные ROI из внешних источников.
 * Валидировать `max_trace_len`, `max_lost_time`, `dt`, `min_static_time`,
   `minAreaRadius*` при парсинге настроек.
-* `BackgroundSubtract::Init` должен возвращать `false`/код, если
-  запрошенный алгоритм недоступен (M12).
-* Обернуть парсинг INI/KeyVal в `try/catch` и давать понятные сообщения
-  (M13).
 
 ### 4.3 API и архитектура
 
@@ -133,7 +127,7 @@ M1, M2, M4, M5 и часть M3 (`CalcEmbeddins`) исправлены 2026-11-1
 * Ввести `DetectorFactory`-регистрацию вместо `switch` (упрощает
   добавление моделей и тестирование).
 * Для парсеров DNN: выбирать выходы по именам, а не по индексам,
-  проверять глубину/размеры тензоров (M46, M47).
+  проверять глубину/размеры тензоров.
 
 ### 4.4 Сборка и упаковка
 
@@ -173,11 +167,17 @@ M20–M23 и CMake-пакет исправлены 2026-11-15 — карточк
       `bad_type` для неизвестных имён; заодно мёртвый `assert(0)`
       (`OCVDNNDetector.cpp:275`). Сделано 2026-11-15 (см.
       `docs/roadmap-archive.md`).
-- [ ] Добавить ASan/UBSan-сборку в CI (хотя бы один workflow).
+- [x] Добавить ASan/UBSan-сборку в CI (хотя бы один workflow):
+      `.github/workflows/sanitizers.yml` (Debug, `-DMT_SANITIZERS=ON`). Собирает
+      проект и прогоняет motion-пример (`-e=1`) на `data/atrium.avi` в sync и
+      async+batch режимах. Сделано 2026-11-27.
 
 **Критерий готовности:** примеры `-e=1`, `-e=2`, `-e=4` и
 `async_detector` запускаются под ASan на `data/atrium.avi` без ошибок;
 недоступные/неизвестные бэкенды и типы не роняют процесс.
+
+Покрытие CI пока ограничено `-e=1`: `-e=2`/`-e=4` требуют моделей/геопривязки,
+`async_detector` — TensorRT; их ASan-прогон остаётся локальным.
 
 ### M1. Тесты, CI, воспроизводимость
 
@@ -201,12 +201,25 @@ M20–M23 и CMake-пакет исправлены 2026-11-15 — карточк
 
 ### M2. Архитектурный рефакторинг (1–2 месяца)
 
-- [ ] Разделить конфиги трекера/детектора; версионировать схему INI.
-- [ ] Публичный API: стабильные заголовки, `namespace`, `MT_API`,
-      семантическое версионирование; убрать внутренние типы из install.
-- [ ] Вынести общие утилиты (логгер, `Frame`, тайминги) в отдельный
-      модуль, убрать дублирование между `example` и `async_detector`.
-- [ ] Реестр детекторов/трекеров вместо `switch`.
+> План по фазам и критерии остановки: `docs/m2-refactoring-plan.md`.
+
+- [x] Разделить конфиги трекера/детектора; версионировать схему INI:
+      `DetectorSettings` + `TrackerSettings : DetectorSettings`,
+      `[meta] schema_version` (2026-11-27, фаза 1).
+- [x] Публичный API и install: публичные заголовки (tracker: `BaseTracker.h`,
+      `TrackerSettings.h`, `DetectorSettings.h`, `trajectory.h`, `defines.h`,
+      `object_types.h`, `Export.h`; detector: `BaseDetector.h`), внутренние не
+      устанавливаются; `MT_API` введён; consumer-тест (static) проходит
+      (2026-11-27, фаза 3).
+- [ ] Explicit exports (`MT_API` = `dllexport`/`dllimport`) и отказ от
+      `WINDOWS_EXPORT_ALL_SYMBOLS`; `namespace mtracking` + семантическое
+      версионирование (фаза 6, нужна shared-сборка и breaking-ветка).
+- [x] Вынести общие утилиты в `src/util` (`mtutil::CreateLogger`,
+      `mtutil::DefaultPalette`, `Frame`); `example`/`async_detector`
+      используют их, дублирование удалено; тайминги остаются в приложениях
+      (у sync/async разная семантика). 2026-11-27, фаза 4.
+- [x] Реестр детекторов/трекеров вместо `switch`: `RegisterDetector`/
+      `RegisterTracker` + таблицы фабрик (2026-11-27, фаза 2).
 - [ ] TensorRT-слой: абстракция над версиями TensorRT, вынести
       `common/` из репозитория или зафиксировать как submodule.
 - [x] Python: pybind11 v2.11+, numpy-владение, `pyproject.toml`,
@@ -244,7 +257,7 @@ M20–M23 и CMake-пакет исправлены 2026-11-15 — карточк
 |---|---|---|---|
 | Unit | `lap()` vs эталон, `AssignmentProblemSolver`, `TKalmanFilter` (все модели), `CRegion` (вырожденные), `nms`, `TypeConverter`, `ParseTrackerSettings` | GoogleTest/Catch2 + CTest | есть INI-тесты `ParseTrackerSettings`; `TypeConverter` — локальный `build/h22_test` (не в git); LAPJV/Kalman/`nms`/`CRegion` — нет |
 | Property | LAPJV: сумма cost ≤ Hungarian; перестановочность; прямоугольные матрицы | генератор случайных матриц | есть локально (`build/lapjv_test`), не в git/CI |
-| Sanitizers | ASan/UBSan на примерах и unit-тестах | CI | нет (локальные регрессионные прогоны h2–h21 выполнялись) |
+| Sanitizers | ASan/UBSan на примерах и unit-тестах | CI | есть `-e=1` (sync и async+batch) в `.github/workflows/sanitizers.yml`; `-e=2/-e=4`/`async_detector` требуют моделей/TensorRT |
 | Integration | Синтетическое видео: 5 объектов, пересечения, потеря, статика; проверка ID и counts | OpenCV + эталонные CSV | нет |
 | Regression | `data/atrium.avi`, `data/TrackingBugs.mp4` — метрики и число треков | скрипт сравнения | частично: локальные наборы (h2–h22, c6) в gitignored `build/` |
 | Fuzz | Парсеры выходов DNN (shape/тип), INI-парсер, `str2ID` | libFuzzer/AFL (опционально) | нет |

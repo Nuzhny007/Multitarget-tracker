@@ -46,7 +46,7 @@ inline void nms(const std::vector<cv::Rect>& srcRects,
 
 			float intArea = static_cast<float>((rect1 & rect2).area());
 			float unionArea = static_cast<float>(rect1.area() + rect2.area() - intArea);
-            float overlap = intArea / unionArea;
+            float overlap = (unionArea > 0.f) ? (intArea / unionArea) : 0.f;
 
             // if there is sufficient overlap, suppress the current bounding box
             if (overlap > thresh)
@@ -114,7 +114,7 @@ inline void nms2(const std::vector<cv::Rect>& srcRects,
 
             float intArea = static_cast<float>((rect1 & rect2).area());
             float unionArea = static_cast<float>(rect1.area() + rect2.area() - intArea);
-            float overlap = intArea / unionArea;
+            float overlap = (unionArea > 0.f) ? (intArea / unionArea) : 0.f;
 
             // if there is sufficient overlap, suppress the current bounding box
             if (overlap > thresh)
@@ -189,7 +189,7 @@ inline void nms3(const std::vector<OBJ>& srcRects,
 
                 float intArea = static_cast<float>((rect1 & rect2).area());
                 float unionArea = static_cast<float>(rect1.area() + rect2.area() - intArea);
-                float overlap = intArea / unionArea;
+                float overlap = (unionArea > 0.f) ? (intArea / unionArea) : 0.f;
 
                 // if there is sufficient overlap, suppress the current bounding box
                 if (overlap > thresh)

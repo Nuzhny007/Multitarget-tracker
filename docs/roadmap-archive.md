@@ -2343,3 +2343,243 @@ yolo11m/x, порог conf); на VisDrone отрицательный MOTA — �
 автотестом (нужна текстурированная сцена).
 
 ---
+
+## P2 — надёжность/численные методы (исправлено 2026-11-27)
+
+Пункты M7, M9–M11, M13–M15, M46, M47 из `docs/roadmap.md`.
+
+### M7. `nms*`: деление на нулевую площадь объединения
+
+**Где:** `src/mtracking/nms.h` (`nms`, `nms2`, `nms3`).
+
+**Симптом:** `intArea / unionArea` при `unionArea == 0` (два вырожденных
+прямоугольника) даёт `NaN`; сравнение `overlap > thresh` с `NaN` всегда
+ложно, NMS/сопоставление работают непредсказуемо.
+
+**Исправление:** `overlap = unionArea > 0 ? intArea / unionArea : 0.f`
+во всех трёх функциях.
+
+---
+
+### M9. `IsRobust` при пустой траектории
+
+**Где:** `src/Tracker/trajectory.h`.
+
+**Симптом:** `GetRawCount(m_trace.size() - 1)` при `size() == 0` — underflow
+в `size_t`; `... / static_cast<float>(0)` — `0/0` → `NaN`; при нулевой высоте
+`m_rrect` — деление на 0 в `sizeRatio`.
+
+**Исправление:** размер траектории кэшируется, `size()-1` под гардом
+`traceSize > 0`; деление `width/height` — под гардом `height > 0`
+(иначе `m_lastRobust = false`); `minTraceSize` клэмпится к 0.
+
+---
+
+### M10. `LeastSquarespoly2` / `LeastSquares2`
+
+**Где:** `src/Tracker/trajectory.h`.
+
+**Симптом:** параметр `count` использовался как конечный индекс
+`for (i = posFrom; i < count; ...)`; при `count > m_trace.size()` —
+`std::out_of_range` из `m_trace.at(i)`. В `LeastSquares2` `sqrt(variance)`
+при округлении мог получить отрицательное значение → `NaN`.
+
+**Исправление:** `count` клэмпится к `m_trace.size()` (и `posFrom >= end`
+даёт нулевые коэффициенты вместо OOB); дисперсия перед `sqrt` клэмпится
+к `>= 0`.
+
+---
+
+### M11. `UpdateIgnoreMask`: отрицательный ROI
+
+**Где:** `src/Detector/BaseDetector.h`.
+
+**Симптом:** для ROI, целиком вышедшего за кадр, `Clamp` делал
+`size += v` при `v < 0` и мог получить отрицательный `width/height`;
+`m_ignoreMask(roiRect) = 0` бросает `cv::Exception`.
+
+**Исправление:** `Clamp` обнуляет неположительный размер, а перед записью
+проверяется `roiRect.width >= 1 && roiRect.height >= 1` (иначе выход).
+
+---
+
+### M13. `std::stoi/stof` по INI/KeyVal
+
+**Где:** `BackgroundSubtract.cpp`, `MotionDetector.cpp`,
+`OCVDNNDetector.cpp`, `ONNXTensorRTDetector.cpp`.
+
+**Симптом:** `std::stoi/stof/stoul` на битом значении INI бросает
+`std::invalid_argument`/`std::out_of_range`; исключение уходило из `Init()` и
+завершало процесс.
+
+**Исправление:** значения парсятся через локальные `ParseIntSafe`/
+`ParseFloatSafe`/`ParseSizeSafe` (try/catch + сообщение в `stderr`), при
+ошибке остаётся прежнее/дефолтное значение. `TrackerSettings.cpp` не менялся:
+`INIReader` использует `strtod` и не бросает.
+
+---
+
+### M14. `ResultsLog`: деление на `m_writeEachNFrame`
+
+**Где:** `example/FileLogger.h`.
+
+**Симптом:** при `write_n_frame = 0` условие `frame.first % m_writeEachNFrame`
+делит на 0.
+
+**Исправление:** в конструкторе `m_writeEachNFrame = std::max(1, writeEachNFrame)`.
+
+---
+
+### M15. `VideoExample`: отсутствующий `logs/`
+
+**Где:** `example/VideoExample.cpp`.
+
+**Симптом:** `rotating_file_sink_mt("logs/...")` при отсутствующем или
+незаписываемом каталоге `logs/` бросает исключение из конструктора примера.
+
+**Исправление:** `fs::create_directories("logs", ec)` + создание file-sink под
+`try/catch`; при ошибке логгер продолжает работать с консольным sink (как в
+`async_detector`).
+
+---
+
+### M46. `OCVDNNDetector`: авто-определение входа по 4D-выходу
+
+**Где:** `src/Detector/OCVDNNDetector.cpp`.
+
+**Симптом:** `getLayerShapes()` отдаёт формы выходных тензоров; для
+`DetectionOutput` это `[1,1,N,7]`, и `m_inWidth/Height = outputs[0][3]/[2]`
+получали `7`/`N` вместо размера сети.
+
+**Исправление:** входной размер выводится из формы только для похожего на
+NCHW изображение тензора (rank 4, batch 1, 1 или 3 канала, размеры `>= 32`);
+`DetectionOutput` исключается явно (`m_outLayerTypes[0]`), иначе остаются
+значения из конфига/дефолт 608.
+
+---
+
+### M47. `YoloONNX::VerifyOutputAspectRatio`: удаление имён выходов
+
+**Где:** `src/Detector/tensorrt_onnx/YoloONNX.cpp`.
+
+**Симптом:** при `nullptr`-буфере имя выхода удалялось из
+`m_params.m_outputTensorNames`, но `m_outpuDims` (индексируется по позиции и не
+связан с именами) не менялся → `GetResult` читал размерности/данные чужого
+тензора.
+
+**Исправление:** имена больше не удаляются; `nullptr`-буфер логируется и
+кадр пропускается (`return false`), список выходов остаётся согласованным с
+`m_outpuDims`.
+
+---
+
+**Проверка (2026-11-27, MSVC 17.14, конфигурация `build/`):**
+`mtracking`, `mdetection`, `yolo_rt_lib`, `MultitargetTracker`, `AsyncDetector`,
+`pymtracking` собираются в `Release` без ошибок.
+
+---
+
+## P2 — результат/надёжность (исправлено 2026-11-27)
+
+Пункты M6, M8, M12, M16–M19 из `docs/roadmap.md`.
+
+### M6. `DrawFilledRect`: 4-канальный кадр и арифметика указателя
+
+**Где:** `src/mtracking/defines.h`.
+
+**Симптом:** `int color[3]` при цикле по `nchans` читал `color[3]` за границей
+для BGRA-кадра; `ptr = frame.ptr(y) + nchans * rect.x` при `rect.x < 0` или
+`rect.x >= cols` давал указатель вне строки, а смещение не совпадало с
+клэмпленной координатой `x`.
+
+**Исправление:** `color[4]` из `cv::Scalar` (с `cl[3]`), индекс клэмпится
+`(i < 4) ? i : 3`; указатель стартует с `x0 = max(0, rect.x)`, границы
+клэмпятся к `frame.cols/rows`.
+
+---
+
+### M8. `WidthDist`/`HeightDist`: деление на 0
+
+**Где:** `src/Tracker/track.cpp`.
+
+**Симптом:** при нулевом размере `min/max` давало `0/0` → `NaN` в матрице
+стоимости `DistRects`.
+
+**Исправление:** при `max(w1, w2) <= 0` (и аналогично для высоты) возвращается
+`0`; иначе `min/max`.
+
+---
+
+### M12. `BackgroundSubtract::Init`: «успех» после fallback
+
+**Где:** `src/Detector/BackgroundSubtract.cpp`.
+
+**Симптом:** при недоступном в сборке алгоритме `Init` переключал тип на VIBE
+и возвращал `true`; сам VIBE при этом не создавался (`m_modelVibe == nullptr`),
+т.е. последующий `Subtract` падал. Ошибка была не видна вызывающему.
+
+**Исправление:** при недоступном/неизвестном алгоритме выставляется
+`ALG_VIBE`, выполняется реальная инициализация VIBE (retry-цикл) и `Init`
+возвращает `false` — вызывающий видит, что запрошенный алгоритм недоступен.
+
+---
+
+### M16. `CarsCounting::RemoveLine`: всегда `false`
+
+**Где:** `example/CarsCounting.cpp`.
+
+**Симптом:** метод удалял линию из `m_lines`, но безусловно возвращал `false`.
+
+**Исправление:** возвращает `true`, если хотя бы одна линия с `lineUid`
+удалена.
+
+---
+
+### M17. `Pix2MapParams`/`GeoParams`: неинициализированные матрицы
+
+**Где:** `example/CarsCounting.h`.
+
+**Симптом:** `cv::Matx` по умолчанию не инициализируется; при неудачном
+`Init`/`SetKeyPoints` `m_toPix`/`m_toGround` содержали мусор (чтение
+неинициализированной памяти, если их использовать до проверки `m_valid`).
+
+**Исправление:** матрицы инициализированы
+`cv::Matx<double, 3, 3>::eye()`; `Pix2MapParams::Ground2Pix` уже отсекает
+`!m_valid`.
+
+---
+
+### M18. `VideoExample::AsyncProcess`: батч > 1
+
+**Где:** `example/VideoExample.cpp`.
+
+**Симптом:** в цикле отрисовки после `cv::waitKey` стоял `else break;` —
+любой «не-`m`»/«не-Esc» кадр (включая отсутствие нажатия) прерывал цикл,
+поэтому при `batch_size > 1` и `m_noShow == false` отображался/писался только
+первый кадр батча.
+
+**Исправление:** `else break;` удалён — обрабатываются все кадры батча, как в
+`SyncProcess`.
+
+---
+
+### M19. `AsyncDetector`: измерялось ожидание, а не обработка
+
+**Где:** `async_detector/AsyncDetector.{h,cpp}`.
+
+**Симптом:** `allTime`/`currTime` считались как `t2 - t1` (ожидание внутри
+`GetFirstProcessedFrame`) и `t2 - m_dt` (латентность с момента захвата), а не
+время детекции/трекинга.
+
+**Исправление:** `FrameInfo` получил `m_detectDt`/`m_trackDt`, замеряемые в
+`DetectThread` (`detector->Detect`) и `TrackingThread` (`Update`+`GetTracks`);
+`Process` суммирует их в `processDt` для `allTime`/`currTime`, лог переименован
+в «algorithms time».
+
+---
+
+**Проверка (2026-11-27, MSVC 17.14, конфигурация `build/`):**
+`mtracking`, `mdetection`, `yolo_rt_lib`, `MultitargetTracker`, `AsyncDetector`,
+`pymtracking` собираются в `Release` без ошибок.
+
+---

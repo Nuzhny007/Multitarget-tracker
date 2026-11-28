@@ -2,6 +2,35 @@
 #include "TrackerSettings.h"
 #include <inih/INIReader.h>
 
+namespace
+{
+///
+/// \brief ParseDetectorSettings
+/// Fills the detector half of the settings (the DetectorSettings base).
+/// Kept separate from the tracker keys so the two configs evolve independently
+/// (roadmap M2).
+///
+void ParseDetectorSettings(const INIReader& reader, DetectorSettings& settings)
+{
+    settings.m_nnWeights = reader.GetString("detection", "nn_weights", "data/yolov4-tiny_best.weights");
+    settings.m_nnConfig = reader.GetString("detection", "nn_config", "data/yolov4-tiny.cfg");
+    settings.m_classNames = reader.GetString("detection", "class_names", "data/traffic.names");
+    settings.m_confidenceThreshold = static_cast<track_t>(reader.GetReal("detection", "confidence_threshold", 0.5));
+    settings.m_maxCropRatio = static_cast<track_t>(reader.GetReal("detection", "max_crop_ratio", -1));
+    settings.m_maxBatch = reader.GetInteger("detection", "max_batch", 1);
+    settings.m_gpuId = reader.GetInteger("detection", "gpu_id", 0);
+    settings.m_netType = reader.GetString("detection", "net_type", "YOLOV4");
+    settings.m_inferencePrecision = reader.GetString("detection", "inference_precision", "FP16");
+    settings.m_detectorBackend = reader.GetInteger("detection", "detector_backend", (int)tracking::Detectors::DNN_OCV);
+    settings.m_dnnTarget = reader.GetString("detection", "ocv_dnn_target", "DNN_TARGET_CPU");
+    settings.m_dnnBackend = reader.GetString("detection", "ocv_dnn_backend", "DNN_BACKEND_OPENCV");
+    const int videoMemory = reader.GetInteger("detection", "video_memory", 0);
+    settings.m_maxVideoMemory = videoMemory > 0 ? static_cast<size_t>(videoMemory) : 0;
+    settings.m_inputSize.width = reader.GetInteger("detection", "input_width", 0);
+    settings.m_inputSize.height = reader.GetInteger("detection", "input_height", 0);
+}
+} // namespace
+
 ///
 /// \brief CarsCounting::ParseTrackerSettings
 ///
@@ -31,6 +60,17 @@ bool ParseTrackerSettings(const std::string& settingsFile, TrackerSettings& trac
     std::cout << "ParseTrackerSettings - readed" << std::endl;
 
     trackerSettings = TrackerSettings();
+
+    // INI schema version (roadmap M2). Absent => legacy schema v1.
+    const int schemaVersion = reader.GetInteger("meta", "schema_version", kTrackerSettingsSchemaVersion);
+    trackerSettings.m_schemaVersion = (schemaVersion >= 1 && schemaVersion <= kTrackerSettingsSchemaVersion)
+        ? schemaVersion : kTrackerSettingsSchemaVersion;
+    if (schemaVersion != trackerSettings.m_schemaVersion)
+    {
+        std::cout << "ParseTrackerSettings: unsupported schema_version " << schemaVersion
+                  << " (supported 1.." << kTrackerSettingsSchemaVersion
+                  << "), unknown keys are ignored" << std::endl;
+    }
 
         // Read tracking settings
         auto trackerType = reader.GetInteger("tracking", "tracker_type", -1);
@@ -78,22 +118,8 @@ bool ParseTrackerSettings(const std::string& settingsFile, TrackerSettings& trac
         trackerSettings.m_byteTrackSettings.m_highThresh = static_cast<float>(reader.GetReal("tracking", "bytetrack_high_thresh", 0.5));
         trackerSettings.m_byteTrackSettings.m_matchThresh = static_cast<float>(reader.GetReal("tracking", "bytetrack_match_thresh", 0.8));
 
-        // Read detection settings
-        trackerSettings.m_nnWeights = reader.GetString("detection", "nn_weights", "data/yolov4-tiny_best.weights");
-        trackerSettings.m_nnConfig = reader.GetString("detection", "nn_config", "data/yolov4-tiny.cfg");
-        trackerSettings.m_classNames = reader.GetString("detection", "class_names", "data/traffic.names");
-        trackerSettings.m_confidenceThreshold = static_cast<track_t>(reader.GetReal("detection", "confidence_threshold", 0.5));
-        trackerSettings.m_maxCropRatio = static_cast<track_t>(reader.GetReal("detection", "max_crop_ratio", -1));
-        trackerSettings.m_maxBatch = reader.GetInteger("detection", "max_batch", 1);
-        trackerSettings.m_gpuId = reader.GetInteger("detection", "gpu_id", 0);
-        trackerSettings.m_netType = reader.GetString("detection", "net_type", "YOLOV4");
-        trackerSettings.m_inferencePrecision = reader.GetString("detection", "inference_precision", "FP16");
-        trackerSettings.m_detectorBackend = reader.GetInteger("detection", "detector_backend", (int)tracking::Detectors::DNN_OCV);
-        trackerSettings.m_dnnTarget = reader.GetString("detection", "ocv_dnn_target", "DNN_TARGET_CPU");
-        trackerSettings.m_dnnBackend = reader.GetString("detection", "ocv_dnn_backend", "DNN_BACKEND_OPENCV");
-		trackerSettings.m_maxVideoMemory = reader.GetInteger("detection", "video_memory", 0);
-        trackerSettings.m_inputSize.width = reader.GetInteger("detection", "input_width", 0);
-        trackerSettings.m_inputSize.height = reader.GetInteger("detection", "input_height", 0);
+        // Read detection settings (DetectorSettings base, roadmap M2)
+        ParseDetectorSettings(reader, trackerSettings);
 
 		std::stringstream whiteList{ reader.GetString("detection", "white_list", "") };
 		trackerSettings.m_whiteList.clear();

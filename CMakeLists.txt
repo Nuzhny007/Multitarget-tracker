@@ -52,6 +52,24 @@ elseif (MSVC)
     add_definitions(-D_USE_MATH_DEFINES -DNOMINMAX)
 endif()
 
+# ---------------------------------------------------------------------------
+# Sanitizers (roadmap M0): a Debug build instrumented with AddressSanitizer
+# and UndefinedBehaviorSanitizer, used by .github/workflows/sanitizers.yml.
+# GCC/Clang only; when OFF nothing changes.
+# ---------------------------------------------------------------------------
+option(MT_SANITIZERS "Build with AddressSanitizer and UndefinedBehaviorSanitizer (GCC/Clang)" OFF)
+if (MT_SANITIZERS)
+    if (MSVC)
+        message(FATAL_ERROR "MT_SANITIZERS requires GCC or Clang")
+    endif()
+    set(MT_SANITIZE_FLAGS "-fsanitize=address,undefined -fno-omit-frame-pointer -g")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MT_SANITIZE_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address,undefined")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address,undefined")
+    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -fsanitize=address,undefined")
+    message(STATUS "MT_SANITIZERS: -fsanitize=address,undefined enabled")
+endif()
+
 # Keep the outputs of the conventional in-repo build tree (cmake -B build)
 # in <repo>/build. Do NOT re-set CMAKE_BINARY_DIR for other (out-of-source)
 # build trees: manually re-pointing it makes every build write into the same

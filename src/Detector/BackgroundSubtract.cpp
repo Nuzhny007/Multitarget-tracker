@@ -18,10 +18,11 @@ BackgroundSubtract::BackgroundSubtract(BGFG_ALGS algType, int channels)
 //----------------------------------------------------------------------
 bool BackgroundSubtract::Init(const config_t& config)
 {
-    bool failed = true;
-    for (; failed;)
+    bool ok = true;
+    bool retry = true;
+    while (retry)
     {
-        failed = false;
+        retry = false;
 
         switch (m_algType)
         {
@@ -35,7 +36,15 @@ bool BackgroundSubtract::Init(const config_t& config)
                 auto conf = config.find(paramsConf[i]);
                 if (conf != config.end())
                 {
-                    params[i] = std::stoi(conf->second);
+                    try
+                    {
+                        params[i] = std::stoi(conf->second);
+                    }
+                    catch (const std::exception&)
+                    {
+                        std::cerr << "BackgroundSubtract: invalid integer for " << paramsConf[i]
+                                  << ": " << conf->second << std::endl;
+                    }
                 }
             }
             m_modelVibe = std::make_unique<vibe::VIBE>(m_channels, params[0], params[1], params[2], params[3], params[4]);
@@ -135,8 +144,10 @@ bool BackgroundSubtract::Init(const config_t& config)
             }
             m_modelOCV = cv::bgsegm::createBackgroundSubtractorCNT(std::get<0>(params), std::get<1>(params) != 0, std::get<2>(params), std::get<3>(params) != 0);
 #else
-            std::cerr << "OpenCV CNT algorithm is not implemented! Used Vibe by default." << std::endl;
-            failed = true;
+            std::cerr << "OpenCV CNT algorithm is not implemented! Falling back to VIBE." << std::endl;
+            m_algType = ALG_VIBE;
+            retry = true;
+            ok = false;
 #endif
             break;
         }
@@ -145,8 +156,10 @@ bool BackgroundSubtract::Init(const config_t& config)
         case ALG_MOG:
         case ALG_GMG:
         case ALG_CNT:
-            std::cerr << "OpenCV bgfg algorithms are not implemented! Used Vibe by default." << std::endl;
-            failed = true;
+            std::cerr << "OpenCV bgfg algorithms are not implemented! Falling back to VIBE." << std::endl;
+            m_algType = ALG_VIBE;
+            retry = true;
+            ok = false;
             break;
 #endif
 
@@ -182,18 +195,15 @@ bool BackgroundSubtract::Init(const config_t& config)
 
         default:
         {
+            std::cerr << "BackgroundSubtract: unknown algorithm type, falling back to VIBE." << std::endl;
             m_algType = ALG_VIBE;
-            failed = false;
+            retry = true;
+            ok = false;
             break;
         }
         }
-        if (failed)
-        {
-            m_algType = ALG_VIBE;
-            failed = false;
-        }
     }
-    return !failed;
+    return ok;
 }
 
 //----------------------------------------------------------------------

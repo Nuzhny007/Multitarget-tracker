@@ -2,6 +2,51 @@
 #include "ONNXTensorRTDetector.h"
 #include "mtracking/nms.h"
 
+namespace
+{
+// Config values come from INI/KeyVal and may be malformed. std::stoi/stof/
+// stoul throw std::invalid_argument/std::out_of_range, which used to escape
+// Init() and terminate the process (roadmap M13). Fall back to the default.
+int ParseIntSafe(const std::string& s, int defVal)
+{
+    try
+    {
+        return std::stoi(s);
+    }
+    catch (const std::exception&)
+    {
+        std::cerr << "ONNXTensorRTDetector: invalid integer value: " << s << std::endl;
+        return defVal;
+    }
+}
+
+float ParseFloatSafe(const std::string& s, float defVal)
+{
+    try
+    {
+        return std::stof(s);
+    }
+    catch (const std::exception&)
+    {
+        std::cerr << "ONNXTensorRTDetector: invalid float value: " << s << std::endl;
+        return defVal;
+    }
+}
+
+size_t ParseSizeSafe(const std::string& s, size_t defVal)
+{
+    try
+    {
+        return static_cast<size_t>(std::stoul(s));
+    }
+    catch (const std::exception&)
+    {
+        std::cerr << "ONNXTensorRTDetector: invalid integer value: " << s << std::endl;
+        return defVal;
+    }
+}
+}
+
 ///
 /// \brief ONNXTensorRTDetector::ONNXTensorRTDetector
 /// \param colorFrame
@@ -47,20 +92,20 @@ bool ONNXTensorRTDetector::Init(const config_t& config)
 
 	auto confidenceThreshold = config.find("confidenceThreshold");
 	if (confidenceThreshold != config.end())
-		m_localConfig.m_detectThresh = std::stof(confidenceThreshold->second);
+		m_localConfig.m_detectThresh = ParseFloatSafe(confidenceThreshold->second, 0.5f);
 
 	auto gpuId = config.find("gpuId");
 	if (gpuId != config.end())
-		m_localConfig.m_gpuInd = std::max(0, std::stoi(gpuId->second));
+		m_localConfig.m_gpuInd = std::max(0, ParseIntSafe(gpuId->second, 0));
 
 	auto maxBatch = config.find("maxBatch");
 	if (maxBatch != config.end())
-        m_batchSize = std::max(1, std::stoi(maxBatch->second));
+        m_batchSize = std::max(1, ParseIntSafe(maxBatch->second, 1));
 	m_localConfig.m_batchSize = static_cast<uint32_t>(m_batchSize);
 
     auto videoMemory = config.find("video_memory");
     if (videoMemory != config.end())
-        m_localConfig.m_videoMemory = std::max<size_t>(0, std::stoul(videoMemory->second));
+        m_localConfig.m_videoMemory = ParseSizeSafe(videoMemory->second, 0);
 
     m_localConfig.m_fileModelCfg = modelConfiguration->second;
     m_localConfig.m_fileModelWeights = modelBinary->second;
@@ -161,7 +206,7 @@ bool ONNXTensorRTDetector::Init(const config_t& config)
 
 	auto maxCropRatio = config.find("maxCropRatio");
 	if (maxCropRatio != config.end())
-		m_maxCropRatio = std::stof(maxCropRatio->second);
+		m_maxCropRatio = ParseFloatSafe(maxCropRatio->second, -1.f);
 
 
 	std::cout << "ONNXTensorRTDetector::Init: tensor_rt::Detector" << std::endl;

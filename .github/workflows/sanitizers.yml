@@ -1,0 +1,73 @@
+name: Sanitizers CI
+
+# ASan/UBSan build of the library + example app (roadmap M0).
+# The motion example (-e=1) needs no NN weights, so it is the only example that
+# can run on a plain runner; -e=2/-e=4 and async_detector need model/map files
+# or TensorRT. ASan findings abort the step (non-zero exit); UBSan is compiled
+# in and reported via print_stacktrace (add halt_on_error=1 to make it fatal).
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  asan-ubsan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libopencv-dev libopencv-contrib-dev cmake g++ ninja-build
+
+    - name: Configure (Debug + ASan/UBSan)
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DMT_SANITIZERS=ON \
+          -DMT_SHARED=OFF \
+          -DBUILD_EXAMPLES=ON \
+          -DBUILD_CARS_COUNTING=OFF \
+          -DBUILD_ASYNC_DETECTOR=OFF \
+          -DBUILD_ONNX_TENSORRT=OFF \
+          -DBUILD_MOT_EVAL=ON \
+          -DMTRACKER_PYTHON=OFF \
+          -DUSE_CLIP=OFF \
+          -DUSE_VSR=OFF \
+          -DUSE_GEOGRAPHICLIB=OFF
+
+    - name: Build
+      run: cmake --build build --parallel
+
+    # `--no_show=1` keeps the run headless (no namedWindow/imshow/waitKey).
+    # The app exits 0 even when detector/tracker init fails, so the log is
+    # checked for the completion marker and for init errors.
+    - name: Smoke test - motion example (sync)
+      env:
+        ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+        UBSAN_OPTIONS: print_stacktrace=1
+      run: |
+        set -o pipefail
+        ./build/MultitargetTracker data/atrium.avi \
+          -e=1 --no_show=1 --start_frame=0 --end_frame=30 --async=0 2>&1 | tee motion_sync.log
+        grep -q "algorithms time" motion_sync.log || { echo "processing did not complete"; exit 1; }
+        if grep -Eq "Detector initialize error|Tracker initialize error" motion_sync.log; then
+          echo "detector/tracker initialization failed"; exit 1
+        fi
+
+    - name: Smoke test - motion example (async + batch)
+      env:
+        ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+        UBSAN_OPTIONS: print_stacktrace=1
+      run: |
+        set -o pipefail
+        ./build/MultitargetTracker data/atrium.avi \
+          -e=1 --no_show=1 --start_frame=0 --end_frame=30 --async=1 --batch_size=2 2>&1 | tee motion_async.log
+        grep -q "algorithms time" motion_async.log || { echo "processing did not complete"; exit 1; }
+        if grep -Eq "Detector initialize error|Tracker initialize error" motion_async.log; then
+          echo "detector/tracker initialization failed"; exit 1
+        fi

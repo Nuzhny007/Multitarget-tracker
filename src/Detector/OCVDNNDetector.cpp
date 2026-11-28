@@ -65,6 +65,36 @@ int FindOut(const std::vector<cv::String>& names, std::initializer_list<const ch
     }
     return -1;
 }
+
+///
+/// \brief Parse a config value without letting std::stoi/stof exceptions
+///        escape Init() (roadmap M13).
+///
+int ParseIntSafe(const std::string& s, int defVal)
+{
+    try
+    {
+        return std::stoi(s);
+    }
+    catch (const std::exception&)
+    {
+        std::cerr << "OCVDNNDetector: invalid integer value: " << s << std::endl;
+        return defVal;
+    }
+}
+
+float ParseFloatSafe(const std::string& s, float defVal)
+{
+    try
+    {
+        return std::stof(s);
+    }
+    catch (const std::exception&)
+    {
+        std::cerr << "OCVDNNDetector: invalid float value: " << s << std::endl;
+        return defVal;
+    }
+}
 } // namespace
 
 ///
@@ -297,27 +327,27 @@ bool OCVDNNDetector::Init(const config_t& config)
 
     auto confidenceThreshold = config.find("confidenceThreshold");
     if (confidenceThreshold != config.end())
-        m_confidenceThreshold = std::stof(confidenceThreshold->second);
+        m_confidenceThreshold = ParseFloatSafe(confidenceThreshold->second, m_confidenceThreshold);
 
     auto nmsThreshold = config.find("nmsThreshold");
     if (nmsThreshold != config.end())
-        m_nmsThreshold = std::stof(nmsThreshold->second);
+        m_nmsThreshold = ParseFloatSafe(nmsThreshold->second, m_nmsThreshold);
 
     auto swapRB = config.find("swapRB");
     if (swapRB != config.end())
-        m_swapRB = std::stoi(swapRB->second) != 0;
+        m_swapRB = ParseIntSafe(swapRB->second, 0) != 0;
 
     auto maxCropRatio = config.find("maxCropRatio");
     if (maxCropRatio != config.end())
-        m_maxCropRatio = std::stof(maxCropRatio->second);
+        m_maxCropRatio = ParseFloatSafe(maxCropRatio->second, m_maxCropRatio);
 
     auto inWidth = config.find("inWidth");
     if (inWidth != config.end())
-        m_inWidth = std::stoi(inWidth->second);
+        m_inWidth = ParseIntSafe(inWidth->second, m_inWidth);
 
     auto inHeight = config.find("inHeight");
     if (inHeight != config.end())
-        m_inHeight = std::stoi(inHeight->second);
+        m_inHeight = ParseIntSafe(inHeight->second, m_inHeight);
 
     if (!m_net.empty())
     {
@@ -391,10 +421,24 @@ bool OCVDNNDetector::Init(const config_t& config)
 
             if (!m_inWidth || !m_inHeight)
             {
-                // The input shape is NCHW: [2] is the height, [3] is the
-                // width (blobFromImage below needs cv::Size(width, height)).
-                m_inHeight = outputs[0][2];
-                m_inWidth = outputs[0][3];
+                // getLayerShapes() hands back the shapes of the output/input
+                // tensors, not necessarily a plain NCHW image. For a
+                // DetectionOutput net the 4-D output is [1, 1, N, 7], so
+                // treating [2]/[3] as height/width gives a bogus N x 7
+                // (roadmap M46). Only derive the size from a plausible NCHW
+                // image tensor: skip DetectionOutput explicitly and require a
+                // sane network size; otherwise keep the configured size / 608.
+                const bool isDetectionOutput = !m_outLayerTypes.empty() && m_outLayerTypes[0] == "DetectionOutput";
+                const bool isNchwImage = !isDetectionOutput &&
+                                         outputs[0].size() == 4 &&
+                                         outputs[0][0] == 1 &&
+                                         (outputs[0][1] == 1 || outputs[0][1] == 3) &&
+                                         outputs[0][2] >= 32 && outputs[0][3] >= 32;
+                if (isNchwImage)
+                {
+                    m_inHeight = outputs[0][2];
+                    m_inWidth = outputs[0][3];
+                }
             }
         }
     }

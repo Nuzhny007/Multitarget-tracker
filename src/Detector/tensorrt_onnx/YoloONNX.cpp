@@ -571,24 +571,22 @@ bool YoloONNX::ProcessInputAspectRatio(const std::vector<cv::Mat>& sampleImages)
 bool YoloONNX::VerifyOutputAspectRatio(size_t imgIdx, std::vector<tensor_rt::Result>& nms_bboxes, cv::Size frameSize)
 {
     std::vector<float*> outputs;
-    for (size_t i = 0; i < m_params.m_outputTensorNames.size();)
+    outputs.reserve(m_params.m_outputTensorNames.size());
+    for (size_t i = 0; i < m_params.m_outputTensorNames.size(); ++i)
     {
         float* output = static_cast<float*>(m_buffers->getHostBuffer(m_params.m_outputTensorNames[i]));
-#if 0
-        if (output)
-            outputs.push_back(output);
-#else
         if (!output)
         {
-            std::cout << i << " output tensor \"" << m_params.m_outputTensorNames[i] << "\" is null, will be removed" << std::endl;
-            m_params.m_outputTensorNames.erase(std::begin(m_params.m_outputTensorNames) + i);
+            // Do not erase the name from m_params: m_outpuDims is indexed by
+            // the same position and is not tied to the names, so removing a
+            // single entry here would make GetResult() read another tensor's
+            // dimensions and data (roadmap M47). A null host buffer means the
+            // engine configuration is inconsistent; skip this frame.
+            std::cerr << "YoloONNX: output tensor \"" << m_params.m_outputTensorNames[i]
+                      << "\" has no host buffer" << std::endl;
+            return false;
         }
-        else
-        {
-            outputs.push_back(output);
-            ++i;
-        }
-#endif
+        outputs.push_back(output);
     }
     if (!outputs.empty())
         nms_bboxes = GetResult(imgIdx, m_params.m_keepTopK, outputs, frameSize);

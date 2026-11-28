@@ -14,6 +14,7 @@ namespace fs = std::filesystem;
 
 #include <opencv2/opencv.hpp>
 #include "object_types.h"
+#include "Export.h"
 
 // ---------------------------------------------------------------------------
 //
@@ -320,15 +321,26 @@ inline void DrawFilledRect(cv::Mat& frame, const cv::Rect& rect, cv::Scalar cl, 
     {
         const int alpha_1 = 255 - alpha;
         const int nchans = frame.channels();
-        int color[3] = { cv::saturate_cast<int>(cl[0]), cv::saturate_cast<int>(cl[1]), cv::saturate_cast<int>(cl[2]) };
-        for (int y = std::max(0, rect.y); y < std::min(rect.y + rect.height, frame.rows - 1); ++y)
+        // cv::Scalar carries 4 components; a 4-channel (BGRA) frame reads
+        // color[3]. The old int color[3] read out of bounds (roadmap M6).
+        const int color[4] = { cv::saturate_cast<int>(cl[0]), cv::saturate_cast<int>(cl[1]),
+                               cv::saturate_cast<int>(cl[2]), cv::saturate_cast<int>(cl[3]) };
+
+        const int x0 = std::max(0, rect.x);
+        const int y0 = std::max(0, rect.y);
+        const int x1 = std::min(rect.x + rect.width, frame.cols);
+        const int y1 = std::min(rect.y + rect.height, frame.rows);
+        for (int y = y0; y < y1; ++y)
         {
-            uchar* ptr = frame.ptr(y) + nchans * rect.x;
-            for (int x = std::max(0, rect.x); x < std::min(rect.x + rect.width, frame.cols - 1); ++x)
+            // Start at the clamped column: offsetting by a negative/off-frame
+            // rect.x used to compute an out-of-range pointer (roadmap M6).
+            uchar* ptr = frame.ptr(y) + nchans * x0;
+            for (int x = x0; x < x1; ++x)
             {
                 for (int i = 0; i < nchans; ++i)
                 {
-                    ptr[i] = cv::saturate_cast<uchar>((alpha_1 * ptr[i] + alpha * color[i]) / 255);
+                    const int ci = (i < 4) ? i : 3;
+                    ptr[i] = cv::saturate_cast<uchar>((alpha_1 * ptr[i] + alpha * color[ci]) / 255);
                 }
                 ptr += nchans;
             }

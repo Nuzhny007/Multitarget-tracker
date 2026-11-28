@@ -542,10 +542,14 @@ track_t CTrack::IsInsideArea(const Point_t& pt, const cv::RotatedRect& rrect) co
 ///
 track_t CTrack::WidthDist(const CRegion& reg) const
 {
-    if (m_lastRegion.m_rrect.size.width < reg.m_rrect.size.width)
-        return m_lastRegion.m_rrect.size.width / reg.m_rrect.size.width;
-    else
-        return reg.m_rrect.size.width / m_lastRegion.m_rrect.size.width;
+    const track_t w1 = m_lastRegion.m_rrect.size.width;
+    const track_t w2 = reg.m_rrect.size.width;
+    const track_t hi = std::max(w1, w2);
+    // Both (or one) sizes may be degenerate; avoid the 0/0 division and
+    // report "no size agreement" (roadmap M8).
+    if (hi <= 0.f)
+        return 0.f;
+    return std::min(w1, w2) / hi;
 }
 
 ///
@@ -555,10 +559,13 @@ track_t CTrack::WidthDist(const CRegion& reg) const
 ///
 track_t CTrack::HeightDist(const CRegion& reg) const
 {
-    if (m_lastRegion.m_rrect.size.height < reg.m_rrect.size.height)
-        return m_lastRegion.m_rrect.size.height / reg.m_rrect.size.height;
-    else
-        return reg.m_rrect.size.height / m_lastRegion.m_rrect.size.height;
+    const track_t h1 = m_lastRegion.m_rrect.size.height;
+    const track_t h2 = reg.m_rrect.size.height;
+    const track_t hi = std::max(h1, h2);
+    // See WidthDist: guard the degenerate 0/0 case (roadmap M8).
+    if (hi <= 0.f)
+        return 0.f;
+    return std::min(h1, h2) / hi;
 }
 
 ///

@@ -10,7 +10,7 @@
 ///
 /// \brief The CTracker class
 ///
-class BaseTracker
+class MT_API BaseTracker
 {
 public:
     BaseTracker() = default;
@@ -45,6 +45,13 @@ public:
         return tracks;
     }
     virtual void GetRemovedTracks(std::vector<track_id_t>& trackIDs) const = 0;
+
+    ///
+    /// \brief Factory signature and registry (roadmap M2: registry instead of
+    /// a hard-coded switch). Built-in trackers are registered on first use.
+    ///
+    using CreateFn = std::unique_ptr<BaseTracker> (*)(const TrackerSettings&, float);
+    static void RegisterTracker(tracking::TrackerTemplate trackerType, CreateFn fn);
 
     ///
     /// \brief CreateTracker

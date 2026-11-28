@@ -29,7 +29,16 @@ endif()
 SOURCE_GROUP("Detector" FILES ${detector_sources} ${detector_headers})
 
 include(CheckIncludeFileCXX)
+# check_include_file_cxx only looks at CMAKE_REQUIRED_INCLUDES, not at the
+# target include path, so without this the contrib probe fails even when
+# opencv_contrib is installed and USE_OCV_BGFG silently defaults to OFF.
+set(_mt_saved_required_includes ${CMAKE_REQUIRED_INCLUDES})
+if (OpenCV_INCLUDE_DIRS)
+    set(CMAKE_REQUIRED_INCLUDES ${OpenCV_INCLUDE_DIRS})
+endif()
 check_include_file_cxx(opencv2/bgsegm.hpp HAVE_OPENCV_CONTRIB)
+set(CMAKE_REQUIRED_INCLUDES ${_mt_saved_required_includes})
+unset(_mt_saved_required_includes)
 if(HAVE_OPENCV_CONTRIB)
     add_definitions(-DHAVE_OPENCV_CONTRIB)
 
@@ -77,7 +86,10 @@ endif()
 target_include_directories(${PROJECT_NAME} INTERFACE
     $<INSTALL_INTERFACE:include>)
 
-set_target_properties(${PROJECT_NAME} PROPERTIES PUBLIC_HEADER "${detector_headers}")
+# Public detector API: only the factory interface. MotionDetector/
+# BackgroundSubtract/vibe/OCVDNN/TensorRT headers are internal (roadmap M2).
+set(public_headers BaseDetector.h)
+set_target_properties(${PROJECT_NAME} PROPERTIES PUBLIC_HEADER "${public_headers}")
 install(TARGETS ${PROJECT_NAME}
         EXPORT MTTrackingExports
         ARCHIVE DESTINATION lib

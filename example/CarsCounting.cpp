@@ -395,14 +395,18 @@ bool CarsCounting::GetLine(unsigned int lineUid, RoadLine& line)
 ///
 bool CarsCounting::RemoveLine(unsigned int lineUid)
 {
+    bool removed = false;
     for (auto it = std::begin(m_lines); it != std::end(m_lines);)
     {
         if (it->m_uid == lineUid)
+        {
             it = m_lines.erase(it);
+            removed = true;
+        }
         else
             ++it;
     }
-    return false;
+    return removed;
 }
 
 ///

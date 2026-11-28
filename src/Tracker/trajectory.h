@@ -259,21 +259,34 @@ struct TrackingObject
     ///
 	bool IsRobust(int minTraceSize, float minRawRatio, cv::Size2f sizeRatio, size_t lastDetectsCount = 0) const
 	{
-		m_lastRobust = m_trace.size() > static_cast<size_t>(minTraceSize);
+		const size_t traceSize = m_trace.size();
+		const int minSize = std::max(0, minTraceSize);
+		m_lastRobust = traceSize > static_cast<size_t>(minSize);
 		if (lastDetectsCount)
 		{
 			size_t raws = m_trace.GetRawCount(lastDetectsCount);
 			m_lastRobust = (raws > 0);
 		}
-		m_lastRobust &= m_trace.GetRawCount(m_trace.size() - 1) / static_cast<float>(m_trace.size()) > minRawRatio;
+		// An empty trajectory has no raw points: guard the size()-1 underflow
+		// and the 0/0 division that used to produce NaN (roadmap M9).
+		m_lastRobust &= (traceSize > 0) &&
+			(m_trace.GetRawCount(traceSize - 1) / static_cast<float>(traceSize) > minRawRatio);
 		if (sizeRatio.width + sizeRatio.height > 0)
 		{
-            float sr = m_rrect.size.width / m_rrect.size.height;
-			if (sizeRatio.width > 0)
-				m_lastRobust &= (sr > sizeRatio.width);
+			// The default-constructed TrackingObject has no rect; avoid 0/0.
+			if (m_rrect.size.height > 0.f)
+			{
+				float sr = m_rrect.size.width / m_rrect.size.height;
+				if (sizeRatio.width > 0)
+					m_lastRobust &= (sr > sizeRatio.width);
 
-			if (sizeRatio.height > 0)
-				m_lastRobust &= (sr < sizeRatio.height);
+				if (sizeRatio.height > 0)
+					m_lastRobust &= (sr < sizeRatio.height);
+			}
+			else
+			{
+				m_lastRobust = false;
+			}
 		}
 		if (m_outOfTheFrame)
 			m_lastRobust = false;
@@ -303,11 +316,21 @@ struct TrackingObject
     ///
 	void LeastSquarespoly2(size_t posFrom, size_t count, track_t& ax, track_t& v0x, track_t& x0, track_t& ay, track_t& v0y, track_t& y0) const
 	{
+		// `count` is the exclusive end index of [posFrom, count); clamp it to
+		// the trace length so a stale/greater value cannot index out of bounds
+		// (roadmap M10).
+		const size_t end = std::min(count, m_trace.size());
+		if (posFrom >= end)
+		{
+			ax = v0x = x0 = ay = v0y = y0 = 0;
+			return;
+		}
+
 		double b1_x(0), b2_x(0), b3_x(0);
 		double b1_y(0), b2_y(0), b3_y(0);
 		double t_0(0.), t_1(0.), t_2(0.), t_3(0.), t_4(0.);
         double j = static_cast<double>(posFrom);
-		for (size_t i = posFrom; i < count; ++i, j += 1.)
+		for (size_t i = posFrom; i < end; ++i, j += 1.)
 		{
 			double sqr_j = sqr(j);
 
@@ -390,7 +413,10 @@ struct TrackingObject
                 sum2 += sqr(dist);
             }
             mean = sum / static_cast<track_t>(framesCount);
-            stddev = sqrt(sum2 / static_cast<track_t>(framesCount) - sqr(mean));
+            // Floating point rounding can make the variance slightly negative
+            // for a (near) perfect fit; sqrt() of it would be NaN (roadmap M10).
+            const track_t variance = sum2 / static_cast<track_t>(framesCount) - sqr(mean);
+            stddev = sqrt(std::max<track_t>(0, variance));
         }
         return res;
     }

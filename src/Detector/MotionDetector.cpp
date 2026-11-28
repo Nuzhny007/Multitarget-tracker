@@ -1,4 +1,5 @@
 #include "MotionDetector.h"
+#include <iostream>
 #if (CV_VERSION_MAJOR > 4)
 #include <opencv2/geometry.hpp>
 #endif
@@ -36,7 +37,16 @@ bool MotionDetector::Init(const config_t& config)
 {
     auto conf = config.find("useRotatedRect");
     if (conf != config.end())
-        m_useRotatedRect = std::stoi(conf->second) != 0;
+    {
+        try
+        {
+            m_useRotatedRect = std::stoi(conf->second) != 0;
+        }
+        catch (const std::exception&)
+        {
+            std::cerr << "MotionDetector: invalid integer for useRotatedRect: " << conf->second << std::endl;
+        }
+    }
 
     return m_backgroundSubst->Init(config);
 }

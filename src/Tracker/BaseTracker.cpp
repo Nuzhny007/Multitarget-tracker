@@ -739,27 +739,80 @@ track_t CTracker::GetEllipseDist(const CTrack& trackRef, const CRegion& reg)
 	return trackRef.IsInsideArea(reg.m_rrect.center, predictedArea);
 }
 
+namespace
+{
+using TrackerRegistryMap = std::map<tracking::TrackerTemplate, BaseTracker::CreateFn>;
+
+///
+/// \brief TrackerRegistry
+/// The tracker factory table. Registration happens once, on the first
+/// CreateTracker() call, so the built-in trackers are always available while
+/// applications can add their own via BaseTracker::RegisterTracker().
+///
+TrackerRegistryMap& TrackerRegistry()
+{
+    static TrackerRegistryMap registry;
+    return registry;
+}
+
+///
+/// \brief RegisterBuiltinTrackers
+/// Thread-safe one-time registration of the trackers compiled into this build.
+///
+void RegisterBuiltinTrackers()
+{
+    static const bool registered = []()
+    {
+        BaseTracker::RegisterTracker(tracking::UniversalTracker,
+            [](const TrackerSettings& settings, float) -> std::unique_ptr<BaseTracker>
+            {
+                std::string reason;
+                if (!settings.CheckFilterModel(&reason))
+                {
+                    std::cerr << "BaseTracker::CreateTracker: " << reason << std::endl;
+                    return nullptr;
+                }
+                return std::make_unique<CTracker>(settings);
+            });
+        BaseTracker::RegisterTracker(tracking::ByteTrack,
+            [](const TrackerSettings& settings, float fps) -> std::unique_ptr<BaseTracker>
+            {
+                return std::make_unique<byte_track::BYTETracker>(
+                    (fps > 1.f) ? cvRound(fps) : 30,
+                    settings.m_byteTrackSettings.m_trackBuffer,
+                    settings.m_byteTrackSettings.m_trackThresh,
+                    settings.m_byteTrackSettings.m_highThresh,
+                    settings.m_byteTrackSettings.m_matchThresh);
+            });
+        return true;
+    }();
+    (void)registered;
+}
+} // namespace
+
+///
+/// \brief RegisterTracker
+/// \param trackerType
+/// \param fn
+///
+void BaseTracker::RegisterTracker(tracking::TrackerTemplate trackerType, CreateFn fn)
+{
+    TrackerRegistry()[trackerType] = fn;
+}
+
 ///
 /// BaseTracker::CreateTracker
 ///
 std::unique_ptr<BaseTracker> BaseTracker::CreateTracker(const TrackerSettings& settings, float fps)
 {
-    switch (settings.m_tracker)
-    {
-    case tracking::UniversalTracker:
-    default:
-    {
-        std::string reason;
-        if (!settings.CheckFilterModel(&reason))
-        {
-            std::cerr << "BaseTracker::CreateTracker: " << reason << std::endl;
-            return nullptr;
-        }
-        return std::make_unique<CTracker>(settings);
-    }
+    RegisterBuiltinTrackers();
 
-    case tracking::ByteTrack:
-        return std::make_unique<byte_track::BYTETracker>((fps > 1.f) ? cvRound(fps) : 30, settings.m_byteTrackSettings.m_trackBuffer,
-            settings.m_byteTrackSettings.m_trackThresh, settings.m_byteTrackSettings.m_highThresh, settings.m_byteTrackSettings.m_matchThresh);
+    auto it = TrackerRegistry().find(settings.m_tracker);
+    if (it == TrackerRegistry().end())
+    {
+        std::cerr << "BaseTracker::CreateTracker: unknown tracker type "
+                  << static_cast<int>(settings.m_tracker) << std::endl;
+        return nullptr;
     }
+    return it->second(settings, fps);
 }

@@ -20,7 +20,7 @@ struct KeyVal
 ///
 /// \brief The BaseDetector class
 ///
-class BaseDetector
+class MT_API BaseDetector
 {
 public:
     ///
@@ -117,6 +117,11 @@ public:
 
         auto Clamp = [](int& v, int& size, int hi)
         {
+            if (size < 1)
+            {
+                size = 0;
+                return;
+            }
             if (v < 0)
             {
                 size += v;
@@ -126,9 +131,16 @@ public:
             {
                 size = hi - 1 - v;
             }
+            // A ROI fully outside the frame (or a non-positive target size)
+            // would produce a negative width/height and cv::Mat::operator()
+            // throws; clamp it to empty instead (roadmap M11).
+            if (size < 1)
+                size = 0;
         };
         Clamp(roiRect.x, roiRect.width, m_ignoreMask.cols);
         Clamp(roiRect.y, roiRect.height, m_ignoreMask.rows);
+        if (roiRect.width < 1 || roiRect.height < 1)
+            return;
         m_ignoreMask(roiRect) = 0;
     }
 
@@ -207,6 +219,13 @@ public:
             cv::imshow("ignoreMask", m_ignoreMask);
 #endif
     }
+
+    ///
+    /// \brief Factory signature and registry (roadmap M2: registry instead of
+    /// a hard-coded switch). Built-in detectors are registered on first use.
+    ///
+    using CreateFn = std::unique_ptr<BaseDetector> (*)(const cv::UMat&);
+    static void RegisterDetector(tracking::Detectors detectorType, CreateFn fn);
 
     ///
     static std::unique_ptr<BaseDetector> CreateDetector(tracking::Detectors detectorType, const config_t& config, const cv::UMat& gray);

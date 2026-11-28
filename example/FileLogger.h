@@ -15,7 +15,7 @@ class ResultsLog
 public:
 	///
 	ResultsLog(const std::string& fileName, int writeEachNFrame)
-		: m_fileName(fileName), m_writeEachNFrame(writeEachNFrame)
+		: m_fileName(fileName), m_writeEachNFrame(std::max(1, writeEachNFrame))
 	{
 	}
 

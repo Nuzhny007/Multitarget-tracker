@@ -1,4 +1,6 @@
 #include "AsyncDetector.h"
+#include "util/Logger.h"
+#include "util/Palette.h"
 
 ///
 /// \brief AsyncDetector::AsyncDetector
@@ -13,63 +15,9 @@ AsyncDetector::AsyncDetector(const cv::CommandLineParser& parser)
     m_endFrame = parser.get<int>("end_frame");
     m_finishDelay = parser.get<int>("end_delay");
 
-    m_colors.emplace_back(255, 0, 0);
-    m_colors.emplace_back(0, 255, 0);
-    m_colors.emplace_back(0, 0, 255);
-    m_colors.emplace_back(255, 255, 0);
-    m_colors.emplace_back(0, 255, 255);
-    m_colors.emplace_back(255, 0, 255);
-    m_colors.emplace_back(255, 127, 255);
-    m_colors.emplace_back(127, 0, 255);
-    m_colors.emplace_back(127, 0, 127);
+    m_colors = mtutil::DefaultPalette();
 
-    // Create loggers
-    m_consoleSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    m_consoleSink->set_level(spdlog::level::from_str(m_showLogsLevel));
-    m_consoleSink->set_pattern("[%^%l%$] %v");
-
-    auto currentTime = std::chrono::system_clock::now();
-    auto transformed = currentTime.time_since_epoch().count() / 1000000;
-    std::time_t tt = std::chrono::system_clock::to_time_t(currentTime);
-    char buffer[80];
-#ifdef WIN32
-    tm timeInfo;
-    localtime_s(&timeInfo, &tt);
-    strftime(buffer, 80, "%G%m%d_%H%M%S", &timeInfo);
-#else
-    auto timeInfo = localtime(&tt);
-    strftime(buffer, 80, "%G%m%d_%H%M%S", timeInfo);
-#endif
-
-    size_t max_size = 1024 * 1024 * 5;
-    size_t max_files = 3;
-
-    // The rotating file sink requires an existing directory; do not let a
-    // missing/unwritable logs/ folder terminate the whole application.
-    std::error_code ec;
-    fs::create_directories("logs", ec);
-    if (ec)
-        std::cerr << "AsyncDetector: can not create logs directory: " << ec.message() << std::endl;
-
-    std::vector<spdlog::sink_ptr> sinks;
-    sinks.push_back(m_consoleSink);
-
-    try
-    {
-        m_fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-            "logs/" + std::string(buffer) + std::to_string(transformed % 1000) + ".txt", max_size, max_files);
-        m_fileSink->set_level(spdlog::level::from_str(m_showLogsLevel));
-        sinks.push_back(m_fileSink);
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "AsyncDetector: can not create log file sink: " << e.what() << std::endl;
-        m_fileSink.reset();
-    }
-
-    m_logger = std::make_shared<spdlog::logger>("traffic", sinks.begin(), sinks.end());
-    m_logger->set_level(spdlog::level::from_str(m_showLogsLevel));
-    m_logger->info("Start service");
+    m_logger = mtutil::CreateLogger("traffic", m_showLogsLevel);
 }
 
 ///
@@ -95,8 +43,6 @@ void AsyncDetector::Process()
 
     for (; !stopFlag.load();)
     {
-		int64 t1 = cv::getTickCount();
-
         // Show frame after detecting and tracking
         frame_ptr processedFrame = m_framesQue.GetFirstProcessedFrame();
         if (!processedFrame)
@@ -105,10 +51,11 @@ void AsyncDetector::Process()
             break;
         }
 
-        int64 t2 = cv::getTickCount();
-
-        allTime += t2 - processedFrame->m_dt;
-        int currTime = cvRound(1000 * (t2 - t1) / freq);
+        // Detection + tracking time of this frame, measured inside the worker
+        // threads. The old code timed the wait in the queue instead (roadmap M19).
+        const int64 processDt = processedFrame->m_detectDt + processedFrame->m_trackDt;
+        allTime += processDt;
+        int currTime = cvRound(1000 * processDt / freq);
 
         DrawData(processedFrame, framesCounter, currTime);
 
@@ -146,7 +93,7 @@ void AsyncDetector::Process()
     if (thCapture.joinable())
         thCapture.join();
 
-    m_logger->info("work time = {}", allTime / freq);
+    m_logger->info("algorithms time = {}", allTime / freq);
 #ifndef SILENT_WORK
 	cv::waitKey(m_finishDelay);
 #endif
@@ -424,7 +371,9 @@ void AsyncDetector::DetectThread(const config_t& config, cv::Mat firstFrame, Fra
         frame_ptr frameInfo = framesQue->GetLastUndetectedFrame();
         if (frameInfo)
         {
+            const int64 t1 = cv::getTickCount();
             detector->Detect(frameInfo->m_clFrame);
+            frameInfo->m_detectDt = cv::getTickCount() - t1;
 
             const regions_t& regions = detector->GetDetects();
             frameInfo->m_regions.assign(regions.begin(), regions.end());
@@ -453,9 +402,11 @@ void AsyncDetector::TrackingThread(const TrackerSettings& settings, FramesQueue*
         frame_ptr frameInfo = framesQue->GetFirstDetectedFrame();
         if (frameInfo)
         {
+            const int64 t1 = cv::getTickCount();
             tracker->Update(frameInfo->m_regions, frameInfo->m_clFrame, frameInfo->m_frameTimeStamp);
-
             tracker->GetTracks(frameInfo->m_tracks);
+            frameInfo->m_trackDt = cv::getTickCount() - t1;
+
             frameInfo->m_inTracker.store(FrameInfo::StateCompleted);
             framesQue->Signal(frameInfo->m_dt);
         }

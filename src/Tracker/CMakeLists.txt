@@ -35,6 +35,19 @@ set(tracker_headers
              byte_track/lapjv.h
              byte_track/STrack.h)
 
+# Public API (installed, self-contained). Internal headers below (track.h,
+# Kalman.h, ShortPathCalculator.h, EmbeddingsCalculator.hpp, HungarianAlg/,
+# LAPJV_algorithm/, byte_track/) are implementation details and are not
+# installed (roadmap M2, phase 3).
+set(public_headers
+             BaseTracker.h
+             TrackerSettings.h
+             trajectory.h
+             ../mtracking/DetectorSettings.h
+             ../mtracking/Export.h
+             ../mtracking/defines.h
+             ../mtracking/object_types.h)
+
 SOURCE_GROUP("Src" FILES ${main_sources})
 SOURCE_GROUP("Tracker" FILES ${tracker_sources} ${tracker_headers})
 
@@ -101,7 +114,7 @@ endif()
 target_include_directories(${PROJECT_NAME} INTERFACE
     $<INSTALL_INTERFACE:include>)
 
-set_target_properties(${PROJECT_NAME} PROPERTIES PUBLIC_HEADER "${tracker_headers};../mtracking/defines.h;../mtracking/object_types.h")
+set_target_properties(${PROJECT_NAME} PROPERTIES PUBLIC_HEADER "${public_headers}")
 install(TARGETS ${PROJECT_NAME}
         EXPORT MTTrackingExports
         ARCHIVE DESTINATION lib
