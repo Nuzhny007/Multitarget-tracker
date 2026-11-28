@@ -1,4 +1,5 @@
 #include <fstream>
+#include <set>
 #include <stdexcept>
 #include "BaseTracker.h"
 #include "byte_track/BYTETracker.h"
@@ -38,12 +39,20 @@ private:
     std::unique_ptr<ShortPathCalculator> m_SPCalculator;
     std::map<objtype_t, std::shared_ptr<EmbeddingsCalculator>> m_embCalculators;
 
+    // ReID model registry. Models are deduplicated by their full description,
+    // so one network file shared by several object types is loaded once.
+    std::map<int, std::shared_ptr<EmbeddingsCalculator>> m_reidModels;
+    bool m_reidAllCpu = true;
+    size_t m_reidFrameCounter = 0;
+    std::set<int> m_reidCpuSkippedModels;
+
     // Reused across frames to avoid per-frame reallocations (roadmap M3).
     std::vector<RegionEmbedding> m_regionEmbeddings;
 
+    void InitReIdModels();
     void CreateDistaceMatrix(const regions_t& regions, const std::vector<RegionEmbedding>& regionEmbeddings, distMatrix_t& costMatrix, track_t maxPossibleCost, track_t& maxCost, bool useLocalCartesian);
     void UpdateTrackingState(const regions_t& regions, cv::UMat currFrame, time_point_t frameTime, bool useLocalCartesian);
-    void CalcEmbeddins(std::vector<RegionEmbedding>& regionEmbeddings, const regions_t& regions, cv::UMat currFrame) const;
+    void CalcEmbeddins(std::vector<RegionEmbedding>& regionEmbeddings, const regions_t& regions, cv::UMat currFrame);
 
     track_t GetEllipseDist(const CTrack& trackRef, const CRegion& reg);
 };
@@ -74,20 +83,121 @@ CTracker::CTracker(const TrackerSettings& settings)
     }
     assert(m_SPCalculator);
 
-    for (const auto& embParam : settings.m_embeddings)
+    InitReIdModels();
+}
+
+///
+/// \brief CTracker::InitReIdModels
+/// Builds the object-type -> model registry from settings. Models with the
+/// same path/preprocessing are shared; a type may be bound to only one model.
+///
+void CTracker::InitReIdModels()
+{
+    m_embCalculators.clear();
+    m_reidModels.clear();
+    m_reidCpuSkippedModels.clear();
+    m_reidAllCpu = true;
+
+    if (m_settings.m_embeddings.empty())
     {
-        std::shared_ptr<EmbeddingsCalculator> embCalc = std::make_shared<EmbeddingsCalculator>();
-        if (!embCalc->Initialize(embParam.m_embeddingCfgName, embParam.m_embeddingWeightsName, embParam.m_inputLayer))
+        if (m_settings.m_distType[tracking::DistFeatureCos] > 0.0f)
         {
-            std::cerr << "EmbeddingsCalculator initialization error: " << embParam.m_embeddingCfgName << ", " << embParam.m_embeddingWeightsName << std::endl;
+            std::cerr << "CTracker: DistFeatureCos is enabled but no ReID models are configured" << std::endl;
+        }
+        return;
+    }
+
+    std::map<std::string, std::shared_ptr<EmbeddingsCalculator>> byDescription;
+    int nextModelId = 0;
+    int initializedModels = 0;
+
+    for (const auto& params : m_settings.m_embeddings)
+    {
+        if (params.m_objectTypes.empty())
+        {
+            std::cerr << "CTracker: ReID model without object types is skipped: "
+                      << params.m_embeddingWeightsName << std::endl;
+            continue;
+        }
+
+        EmbeddingModelDesc desc;
+        desc.m_name = params.m_name.empty() ? params.m_embeddingWeightsName : params.m_name;
+        desc.m_path = params.m_embeddingWeightsName;
+        desc.m_inputSize = params.m_inputLayer;
+        desc.m_mean = params.m_mean;
+        desc.m_std = params.m_std;
+        desc.m_swapRB = params.m_swapRB;
+        desc.m_maxBatch = params.m_maxBatch > 0
+            ? params.m_maxBatch
+            : m_settings.m_reidSettings.m_maxBatch;
+        desc.m_backend = !params.m_backend.empty()
+            ? params.m_backend
+            : m_settings.m_reidSettings.m_backend;
+        desc.m_warmup = m_settings.m_reidSettings.m_warmup;
+        desc.m_minCropSide = params.m_minCropSide > 0
+            ? params.m_minCropSide
+            : m_settings.m_reidSettings.m_minCropSide;
+
+        // Key includes every property that changes the produced embedding:
+        // path, input size, preprocessing and backend.
+        const std::string key =
+            desc.m_path + "|" +
+            std::to_string(desc.m_inputSize.width) + "x" + std::to_string(desc.m_inputSize.height) + "|" +
+            cv::format("%.6f,%.6f,%.6f", desc.m_mean[0], desc.m_mean[1], desc.m_mean[2]) + "|" +
+            cv::format("%.6f,%.6f,%.6f", desc.m_std[0], desc.m_std[1], desc.m_std[2]) + "|" +
+            (desc.m_swapRB ? "rgb" : "bgr") + "|" + desc.m_backend;
+
+        std::shared_ptr<EmbeddingsCalculator> calculator;
+        const auto existingModel = byDescription.find(key);
+        if (existingModel != std::end(byDescription))
+        {
+            calculator = existingModel->second;
         }
         else
         {
-            for (auto objType : embParam.m_objectTypes)
+            calculator = std::make_shared<EmbeddingsCalculator>();
+            const int modelId = nextModelId++;
+            if (!calculator->Initialize(desc, modelId))
             {
-                m_embCalculators.try_emplace((objtype_t)objType, embCalc);
+                std::cerr << "CTracker: ReID model initialization error: " << desc.m_path << std::endl;
+                continue;
             }
+            byDescription.emplace(key, calculator);
+            m_reidModels.emplace(modelId, calculator);
+            ++initializedModels;
         }
+
+        for (const objtype_t objType : params.m_objectTypes)
+        {
+            const auto existingType = m_embCalculators.find(objType);
+            if (existingType != std::end(m_embCalculators))
+            {
+                if (existingType->second != calculator)
+                {
+                    throw std::invalid_argument(
+                        "CTracker: object type '" + TypeConverter::Type2Str(objType) +
+                        "' is bound to more than one ReID model");
+                }
+                continue;
+            }
+            m_embCalculators.emplace(objType, calculator);
+        }
+    }
+
+    m_reidAllCpu = true;
+    for (const auto& item : m_reidModels)
+    {
+        if (!item.second->IsCpu())
+        {
+            m_reidAllCpu = false;
+            break;
+        }
+    }
+
+    if (m_settings.m_distType[tracking::DistFeatureCos] > 0.0f && initializedModels == 0)
+    {
+        throw std::invalid_argument(
+            "CTracker: DistFeatureCos is enabled but no ReID model could be initialized");
     }
 }
 
@@ -165,6 +275,7 @@ void CTracker::UpdateTrackingState(const regions_t& regions,
 
     // Reuse the per-tracker buffer instead of allocating a new vector every
     // frame; CalcEmbeddins leaves it empty when no embedding metric is active.
+    ++m_reidFrameCounter;
     CalcEmbeddins(m_regionEmbeddings, regions, currFrame);
     const std::vector<RegionEmbedding>& regionEmbeddings = m_regionEmbeddings;
 
@@ -383,27 +494,37 @@ void CTracker::UpdateTrackingState(const regions_t& regions,
 #endif
         if (!regionAssigned[i])
         {
+            std::unique_ptr<CTrack> newTrack;
             if (regionEmbeddings.empty())
-                m_tracks.push_back(std::make_unique<CTrack>(regions[i],
-                                                            m_settings.m_kalmanType,
-                                                            m_settings.m_dt,
-                                                            m_settings.m_accelNoiseMag,
-                                                            m_settings.m_useAcceleration,
-                                                            m_nextTrackID,
-                                                            m_settings.m_filterGoal,
-                                                            m_settings.m_lostTrackType,
-                                                            frameTime));
+            {
+                newTrack = std::make_unique<CTrack>(regions[i],
+                                                    m_settings.m_kalmanType,
+                                                    m_settings.m_dt,
+                                                    m_settings.m_accelNoiseMag,
+                                                    m_settings.m_useAcceleration,
+                                                    m_nextTrackID,
+                                                    m_settings.m_filterGoal,
+                                                    m_settings.m_lostTrackType,
+                                                    frameTime);
+            }
             else
-                m_tracks.push_back(std::make_unique<CTrack>(regions[i],
-                                                            regionEmbeddings[i],
-                                                            m_settings.m_kalmanType,
-                                                            m_settings.m_dt,
-                                                            m_settings.m_accelNoiseMag,
-                                                            m_settings.m_useAcceleration,
-                                                            m_nextTrackID,
-                                                            m_settings.m_filterGoal,
-                                                            m_settings.m_lostTrackType,
-                                                            frameTime));
+            {
+                newTrack = std::make_unique<CTrack>(regions[i],
+                                                    regionEmbeddings[i],
+                                                    m_settings.m_kalmanType,
+                                                    m_settings.m_dt,
+                                                    m_settings.m_accelNoiseMag,
+                                                    m_settings.m_useAcceleration,
+                                                    m_nextTrackID,
+                                                    m_settings.m_filterGoal,
+                                                    m_settings.m_lostTrackType,
+                                                    frameTime);
+            }
+            newTrack->SetAppearanceParams(
+                static_cast<size_t>(std::max(1, m_settings.m_reidSettings.m_gallerySize)),
+                m_settings.m_reidSettings.m_qualityGate,
+                m_settings.m_reidSettings.m_minQuality);
+            m_tracks.push_back(std::move(newTrack));
             m_nextTrackID = m_nextTrackID.NextID();
         }
     }
@@ -564,28 +685,25 @@ void CTracker::CreateDistaceMatrix(const regions_t& regions,
                 }
 				++ind;
 
-				// Cosine distance between embeddings
+				// Cosine distance between embeddings. The track itself checks
+                // that the observation and its gallery come from the same
+                // model, so near types (car/truck/bus) can share one model.
                 if (m_settings.m_distType[ind] > 0.0f && ind == tracking::DistFeatureCos)
                 {
-                    if (reg.m_type == track->LastRegion().m_type)
+                    auto resCos = track->CalcCosine(regionEmbeddings[j]);
+                    if (resCos.second)
                     {
-                        auto resCos = track->CalcCosine(regionEmbeddings[j]);
-                        if (resCos.second)
-                        {
-                            dist += m_settings.m_distType[ind] * resCos.first;
-                            //std::cout << "CalcCosine: " << TypeConverter::Type2Str(track->LastRegion().m_type) << ", reg = " << reg.m_brect << ", track = " << track->LastRegion().m_brect << ": res = " << resCos.first << ", dist = " << dist << std::endl;
-                        }
+                        dist += m_settings.m_distType[ind] * resCos.first;
+                    }
+                    else
+                    {
+                        // Embeddings are unavailable (no model for this type or an empty embedding): the cosine metric is excluded from the sum.
+                        // Rescale the accumulated distance by the weights of the remaining metrics so the overall scale (and the m_distThres semantics) stays consistent.
+                        const track_t restWeight = 1.f - m_settings.m_distType[ind];
+                        if (restWeight > 1e-6f)
+                            dist /= restWeight;
                         else
-                        {
-                            // Embeddings are unavailable (no model for this type or an empty embedding): the cosine metric is excluded from the sum.
-                            // Rescale the accumulated distance by the weights of the remaining metrics so the overall scale (and the m_distThres semantics) stays consistent.
-                            const track_t restWeight = 1.f - m_settings.m_distType[ind];
-                            if (restWeight > 1e-6f)
-                                dist /= restWeight;
-                            else
-                                dist = maxPossibleCost; // No usable metric for this pair
-                            //std::cout << "CalcCosine: " << TypeConverter::Type2Str(track->LastRegion().m_type) << ", reg = " << reg.m_brect << ", track = " << track->LastRegion().m_brect << ": res = 1, weight = " << m_settings.m_distType[ind] << ", dist = " << dist << std::endl;
-                        }
+                            dist = maxPossibleCost; // No usable metric for this pair
                     }
                     if constexpr (DIST_LOGS)
                         std::cout << "DistFeatureCos : " << m_settings.m_distType[ind] << ", dist = " << dist << std::endl;
@@ -639,7 +757,7 @@ void CTracker::CreateDistaceMatrix(const regions_t& regions,
 /// \param regions
 /// \param currFrame
 ///
-void CTracker::CalcEmbeddins(std::vector<RegionEmbedding>& regionEmbeddings, const regions_t& regions, cv::UMat currFrame) const
+void CTracker::CalcEmbeddins(std::vector<RegionEmbedding>& regionEmbeddings, const regions_t& regions, cv::UMat currFrame)
 {
     regionEmbeddings.clear();
 
@@ -690,24 +808,140 @@ void CTracker::CalcEmbeddins(std::vector<RegionEmbedding>& regionEmbeddings, con
         }
     }
 
-    // Cosine distance between embeddings
-    if (hasFrame && needFeature)
-    {
-        for (size_t j = 0; j < regions.size(); ++j)
-        {
-            if (regionEmbeddings[j].m_embedding.empty())
-            {
-                const cv::Rect roi = regions[j].m_brect & frameRect;
-                if (roi.width < 2 || roi.height < 2)
-                    continue;
+    // Cosine distance between embeddings: group crops by model and run one
+    // batched inference per model. CPU fallback is throttled/capped so a
+    // 30-object frame does not turn into a multi-second stall.
+    if (!hasFrame || !needFeature)
+        return;
 
-                // std::cout << "Search embCalc for " << TypeConverter::Type2Str(regions[j].m_type) << ": ";
-                auto embCalc = m_embCalculators.find(regions[j].m_type);
-                if (embCalc != std::end(m_embCalculators))
-                {
-                    embCalc->second->Calc(currFrame, roi, regionEmbeddings[j].m_embedding);
-                }
+    const bool cpuMode = m_reidAllCpu && !m_reidModels.empty();
+    if (cpuMode && m_settings.m_reidSettings.m_cpuInterval > 1 &&
+        ((m_reidFrameCounter > 0 ? m_reidFrameCounter - 1 : 0) %
+            static_cast<size_t>(m_settings.m_reidSettings.m_cpuInterval)) != 0)
+    {
+        return;
+    }
+
+    struct ReIdCrop
+    {
+        size_t m_regionIndex = 0;
+        cv::Mat m_crop;
+        float m_quality = 0.0f;
+    };
+    std::map<int, std::vector<ReIdCrop>> groups;
+    std::map<int, std::shared_ptr<EmbeddingsCalculator>> groupModels;
+
+    const cv::Mat frame = currFrame.getMat(cv::ACCESS_READ);
+
+    auto Clamp01 = [](float value) -> float
+    {
+        return std::max(0.0f, std::min(1.0f, value));
+    };
+
+    // Cheap crop-quality heuristic: size, border truncation, sharpness and
+    // detector confidence. It is used to decide whether a crop may update the
+    // track gallery; matching still uses the current observation.
+    auto CropQuality = [&](const cv::Mat& crop, const cv::Rect& roi, float confidence) -> float
+    {
+        const int minSide = std::min(roi.width, roi.height);
+        const float sizeScore = Clamp01(static_cast<float>(minSide) / 48.0f);
+
+        float borderScore = 1.0f;
+        if (roi.x <= 0 || roi.y <= 0 ||
+            roi.x + roi.width >= frameRect.width || roi.y + roi.height >= frameRect.height)
+        {
+            borderScore = 0.5f;
+        }
+
+        float sharpnessScore = 0.5f;
+        try
+        {
+            cv::Mat gray;
+            if (crop.channels() == 3)
+                cv::cvtColor(crop, gray, cv::COLOR_BGR2GRAY);
+            else if (crop.channels() == 4)
+                cv::cvtColor(crop, gray, cv::COLOR_BGRA2GRAY);
+            else
+                gray = crop;
+            cv::Mat laplacian;
+            cv::Laplacian(gray, laplacian, CV_64F);
+            cv::Scalar mean;
+            cv::Scalar stddev;
+            cv::meanStdDev(laplacian, mean, stddev);
+            sharpnessScore = Clamp01(static_cast<float>(stddev[0] * stddev[0]) / 500.0f);
+        }
+        catch (const cv::Exception&)
+        {
+            sharpnessScore = 0.5f;
+        }
+
+        const float confidenceScore = confidence >= 0.0f ? Clamp01(confidence) : 0.5f;
+        return Clamp01(0.45f * sizeScore + 0.25f * sharpnessScore +
+                       0.20f * confidenceScore + 0.10f * borderScore);
+    };
+
+    for (size_t j = 0; j < regions.size(); ++j)
+    {
+        const auto embCalc = m_embCalculators.find(regions[j].m_type);
+        if (embCalc == std::end(m_embCalculators))
+            continue;
+
+        const cv::Rect roi = regions[j].m_brect & frameRect;
+        const int minSide = std::min(roi.width, roi.height);
+        if (minSide < std::max(2, embCalc->second->GetMinCropSide()))
+            continue;
+
+        ReIdCrop item;
+        item.m_regionIndex = j;
+        item.m_crop = frame(roi);
+        item.m_quality = m_settings.m_reidSettings.m_qualityGate
+            ? CropQuality(item.m_crop, roi, regions[j].m_confidence)
+            : 1.0f;
+
+        const int modelId = embCalc->second->GetModelId();
+        groups[modelId].push_back(item);
+        groupModels[modelId] = embCalc->second;
+    }
+
+    for (auto& group : groups)
+    {
+        const int modelId = group.first;
+        const auto modelIt = groupModels.find(modelId);
+        if (modelIt == std::end(groupModels))
+            continue;
+        const auto& calculator = modelIt->second;
+        auto& items = group.second;
+
+        if (calculator->IsCpu() && m_settings.m_reidSettings.m_cpuMaxObjects > 0 &&
+            items.size() > static_cast<size_t>(m_settings.m_reidSettings.m_cpuMaxObjects))
+        {
+            if (m_reidCpuSkippedModels.insert(modelId).second)
+            {
+                std::cerr << "CTracker: CPU ReID budget exceeded (" << items.size()
+                          << " > " << m_settings.m_reidSettings.m_cpuMaxObjects
+                          << "), ReID is skipped for model " << modelId << std::endl;
             }
+            continue;
+        }
+
+        std::vector<cv::Mat> crops;
+        crops.reserve(items.size());
+        for (const ReIdCrop& item : items)
+            crops.push_back(item.m_crop);
+
+        cv::Mat embeddings;
+        if (!calculator->Extract(crops, embeddings) || embeddings.rows != static_cast<int>(items.size()))
+        {
+            std::cerr << "CTracker: ReID batch inference failed for model " << modelId << std::endl;
+            continue;
+        }
+
+        for (size_t k = 0; k < items.size(); ++k)
+        {
+            RegionEmbedding& regionEmbedding = regionEmbeddings[items[k].m_regionIndex];
+            regionEmbedding.m_embedding = embeddings.row(static_cast<int>(k)).clone();
+            regionEmbedding.m_modelId = modelId;
+            regionEmbedding.m_quality = items[k].m_quality;
         }
     }
 }

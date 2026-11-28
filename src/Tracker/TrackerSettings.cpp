@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cctype>
 #include <sstream>
 #include "TrackerSettings.h"
 #include <inih/INIReader.h>
@@ -7,6 +9,118 @@ namespace mtracking
 
 namespace
 {
+std::string ToLower(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+std::string Trim(const std::string& value)
+{
+    const auto first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return {};
+    const auto last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1);
+}
+
+///
+/// \brief SplitList
+/// Splits a ';' or ',' separated ini value, trimming whitespace and dropping
+/// empty items. Used for model names and object type lists.
+///
+std::vector<std::string> SplitList(const std::string& value)
+{
+    std::vector<std::string> result;
+    std::string item;
+    for (char c : value)
+    {
+        if (c == ';' || c == ',')
+        {
+            item = Trim(item);
+            if (!item.empty())
+                result.push_back(item);
+            item.clear();
+        }
+        else
+        {
+            item.push_back(c);
+        }
+    }
+    item = Trim(item);
+    if (!item.empty())
+        result.push_back(item);
+    return result;
+}
+
+///
+/// \brief ParseScalar
+/// Parses "0.485;0.456;0.406" (or comma separated) into a cv::Scalar.
+/// A single value is replicated to all three channels.
+///
+bool ParseScalar(const std::string& value, cv::Scalar& result)
+{
+    const std::vector<std::string> parts = SplitList(value);
+    if (parts.empty())
+        return false;
+
+    std::vector<double> numbers;
+    numbers.reserve(parts.size());
+    for (const std::string& part : parts)
+    {
+        try
+        {
+            size_t consumed = 0;
+            const double number = std::stod(part, &consumed);
+            if (consumed != part.size())
+                return false;
+            numbers.push_back(number);
+        }
+        catch (const std::exception&)
+        {
+            return false;
+        }
+    }
+
+    if (numbers.size() == 1)
+        result = cv::Scalar(numbers[0], numbers[0], numbers[0]);
+    else if (numbers.size() >= 3)
+        result = cv::Scalar(numbers[0], numbers[1], numbers[2]);
+    else
+        return false;
+    return true;
+}
+
+///
+/// \brief ParseDistances
+/// Parses the 7 metric weights from `distance_weights` (semicolon/comma
+/// separated, sum must be 1).
+///
+bool ParseDistances(const std::string& value, std::array<track_t, tracking::DistsCount>& result)
+{
+    const std::vector<std::string> parts = SplitList(value);
+    if (parts.size() != tracking::DistsCount)
+        return false;
+
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        try
+        {
+            size_t consumed = 0;
+            const double number = std::stod(parts[i], &consumed);
+            if (consumed != parts[i].size() || number < 0.0 || number > 1.0)
+                return false;
+            result[i] = static_cast<track_t>(number);
+        }
+        catch (const std::exception&)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 ///
 /// \brief ParseDetectorSettings
 /// Fills the detector half of the settings (the DetectorSettings base).
@@ -85,6 +199,26 @@ bool ParseTrackerSettings(const std::string& settingsFile, TrackerSettings& trac
         auto distType = reader.GetInteger("tracking", "distance_type", -1);
         if (distType >= 0 && distType < (int)tracking::DistsCount)
             trackerSettings.SetDistance((tracking::DistType)distType);
+
+        // Optional explicit metric weights, e.g. for ReID:
+        //   distance_weights = 0;0;0.5;0;0.5;0;0
+        // Order: DistCenters, DistRects, DistJaccard, DistHist,
+        //        DistFeatureCos, DistMahalanobis, DistLocalCartesian.
+        const std::string distanceWeights = reader.GetString("tracking", "distance_weights", "");
+        if (!distanceWeights.empty())
+        {
+            std::array<track_t, tracking::DistsCount> weights;
+            if (!ParseDistances(distanceWeights, weights))
+            {
+                std::cout << "ParseTrackerSettings: invalid tracking.distance_weights (expected "
+                          << tracking::DistsCount << " values)" << std::endl;
+            }
+            else if (!trackerSettings.SetDistances(weights))
+            {
+                std::cout << "ParseTrackerSettings: tracking.distance_weights must sum to 1"
+                          << std::endl;
+            }
+        }
 
         auto kalmanType = reader.GetInteger("tracking", "kalman_type", -1);
         if (kalmanType >= 0 && kalmanType < (int)tracking::KalmanCount)
@@ -167,6 +301,116 @@ bool ParseTrackerSettings(const std::string& settingsFile, TrackerSettings& trac
         trackerSettings.m_postProcessSettings.m_recheckInterval = reader.GetInteger("postprocess", "recheck_interval", 1);
         trackerSettings.m_postProcessSettings.m_minObjectSide = reader.GetInteger("postprocess", "min_object_side", 8);
         trackerSettings.m_postProcessSettings.m_dumpPath = reader.GetString("postprocess", "dump", "");
+
+        // Read ReID settings (roadmap M3): a registry of models bound to object
+        // types plus a global GPU/CPU and appearance-gallery policy.
+        const std::string modelsList = reader.GetString("reid", "models", "");
+        const std::vector<std::string> modelNames = SplitList(modelsList);
+        const bool reIdEnabled = reader.GetBoolean("reid", "enable", !modelNames.empty());
+
+        trackerSettings.m_reidSettings.m_enable = reIdEnabled;
+        trackerSettings.m_reidSettings.m_backend = ToLower(reader.GetString("reid", "backend", "cuda_fp16"));
+        trackerSettings.m_reidSettings.m_maxBatch = std::max(1,
+            static_cast<int>(reader.GetInteger("reid", "max_batch", 32)));
+        trackerSettings.m_reidSettings.m_gallerySize = std::max(1,
+            static_cast<int>(reader.GetInteger("reid", "gallery_size", 15)));
+        trackerSettings.m_reidSettings.m_qualityGate = reader.GetBoolean("reid", "quality_gate", true);
+        trackerSettings.m_reidSettings.m_minQuality = static_cast<float>(
+            std::clamp(reader.GetReal("reid", "min_quality", 0.35), 0.0, 1.0));
+        trackerSettings.m_reidSettings.m_minCropSide = std::max(1,
+            static_cast<int>(reader.GetInteger("reid", "min_crop_side", 16)));
+        trackerSettings.m_reidSettings.m_cpuMaxObjects = std::max(0,
+            static_cast<int>(reader.GetInteger("reid", "cpu_max_objects", 8)));
+        trackerSettings.m_reidSettings.m_cpuInterval = std::max(1,
+            static_cast<int>(reader.GetInteger("reid", "cpu_interval", 5)));
+        trackerSettings.m_reidSettings.m_warmup = reader.GetBoolean("reid", "warmup", true);
+
+        trackerSettings.m_embeddings.clear();
+        if (reIdEnabled)
+        {
+            if (modelNames.empty())
+            {
+                std::cout << "ParseTrackerSettings: [reid] enable=1 but models list is empty" << std::endl;
+            }
+
+            for (const std::string& modelName : modelNames)
+            {
+                const std::string section = "reid_" + modelName;
+                if (!reader.HasSection(section))
+                {
+                    std::cout << "ParseTrackerSettings: missing [" << section << "] section" << std::endl;
+                    continue;
+                }
+
+                const std::string modelPath = reader.GetString(section, "model", "");
+                if (modelPath.empty())
+                {
+                    std::cout << "ParseTrackerSettings: [" << section << "] model is empty" << std::endl;
+                    continue;
+                }
+
+                TrackerSettings::EmbeddingParams params;
+                params.m_name = modelName;
+                params.m_embeddingCfgName = modelPath;
+                params.m_embeddingWeightsName = modelPath;
+                params.m_inputLayer.width = reader.GetInteger(section, "input_width", 0);
+                params.m_inputLayer.height = reader.GetInteger(section, "input_height", 0);
+                if (params.m_inputLayer.width <= 0 || params.m_inputLayer.height <= 0)
+                {
+                    std::cout << "ParseTrackerSettings: [" << section
+                              << "] input_width/input_height must be positive" << std::endl;
+                    continue;
+                }
+
+                if (!ParseScalar(reader.GetString(section, "mean", "0.485;0.456;0.406"), params.m_mean))
+                {
+                    std::cout << "ParseTrackerSettings: [" << section << "] invalid mean; using 0" << std::endl;
+                    params.m_mean = cv::Scalar(0, 0, 0);
+                }
+                if (!ParseScalar(reader.GetString(section, "std", "0.229;0.224;0.225"), params.m_std))
+                {
+                    std::cout << "ParseTrackerSettings: [" << section << "] invalid std; using 1" << std::endl;
+                    params.m_std = cv::Scalar(1, 1, 1);
+                }
+                params.m_swapRB = reader.GetBoolean(section, "swap_rb", true);
+                params.m_maxBatch = static_cast<int>(reader.GetInteger(section, "max_batch",
+                    trackerSettings.m_reidSettings.m_maxBatch));
+                params.m_backend = ToLower(reader.GetString(section, "backend",
+                    trackerSettings.m_reidSettings.m_backend));
+                params.m_minCropSide = static_cast<int>(reader.GetInteger(section, "min_crop_side", 0));
+
+                const std::vector<std::string> typeNames = SplitList(reader.GetString(section, "types", modelName));
+                for (const std::string& typeName : typeNames)
+                {
+                    objtype_t type = TypeConverter::Str2Type(typeName);
+                    if (type == bad_type)
+                    {
+                        // Detector class names (e.g. VisDrone pedestrian/van)
+                        // may be registered later by BaseDetector::FillTypesMap.
+                        // Register them now so a [reid_*] section can refer to
+                        // them before the detector is initialized.
+                        TypeConverter::AddNewType(typeName);
+                        type = TypeConverter::Str2Type(typeName);
+                    }
+                    if (type == bad_type)
+                    {
+                        std::cout << "ParseTrackerSettings: [" << section
+                                  << "] unknown object type '" << typeName << "'" << std::endl;
+                        continue;
+                    }
+                    params.m_objectTypes.push_back(type);
+                }
+
+                if (params.m_objectTypes.empty())
+                {
+                    std::cout << "ParseTrackerSettings: [" << section
+                              << "] no valid object types; model skipped" << std::endl;
+                    continue;
+                }
+
+                trackerSettings.m_embeddings.push_back(params);
+            }
+        }
 
     res = true;
     std::cout << "ParseTrackerSettings: " << res << std::endl;

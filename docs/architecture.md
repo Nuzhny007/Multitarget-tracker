@@ -295,7 +295,10 @@ class BaseTracker {
 ```text
 1. (опционально) CalcEmbeddins: гистограммы и ReID-эмбеддинги для всех
    регионов; в IoU-only режиме (ни Hist, ни FeatureCos) пропускается,
-   буфер переиспользуется между кадрами (roadmap M3)
+   буфер переиспользуется между кадрами (roadmap M3). Кропы группируются по
+   модели и считаются одним батчем на модель; на CPU действует бюджет
+   (`cpu_max_objects`/`cpu_interval`), а в трек добавляется только качественный
+   эмбеддинг.
 2. для каждого трека: KalmanPredictPoint()/KalmanPredictRect()
 3. CreateDistaceMatrix: cost[track][region] = сумма взвешенных метрик
 4. ShortPathCalculator::Solve -> assignmentT2R
@@ -316,7 +319,9 @@ class BaseTracker {
 ### 6.3 Метрики расстояния
 
 Веса задаются массивом `m_distType[DistType]`, сумма должна быть равна 1
-(`CheckDistance`/`SetDistances`). В `CreateDistaceMatrix`:
+(`CheckDistance`/`SetDistances`). В INI можно задать один тип метрики
+(`distance_type`) или явные веса всех семи метрик
+(`tracking.distance_weights = 0;0;0.5;0;0.5;0;0`). В `CreateDistaceMatrix`:
 
 | Метрика | Источник | Примечание |
 |---|---|---|
@@ -324,12 +329,50 @@ class BaseTracker {
 | `DistRects` | эллипс + отношение ширины/высоты | |
 | `DistJaccard` | IoU bounding rect | |
 | `DistHist` | `cv::compareHist(BHATTACHARYYA)` | ROI пересекается с кадром; при отсутствии/несовпадении гистограмм расстояние = 1 |
-| `DistFeatureCos` | косинус ReID-эмбеддингов | ROI клэмпится к кадру |
+| `DistFeatureCos` | косинус ReID-эмбеддингов | ROI клэмпится к кадру; сравниваются только эмбеддинги одной модели |
 | `DistMahalanobis` | `cv::Mahalanobis` | S = H·P·Hᵀ + R; для UKF/AUKF — через матрицу селекции H |
 | `DistLocalCartesian` | евклид в ENU, метры | порог `m_distThresLocalCartesian` |
 
 Дополнительно проверяется совместимость типов (`CheckType` + `m_nearTypes`):
 несовместимая пара получает `maxPossibleCost`.
+
+### 6.3.1 ReID-слой
+
+ReID реализован в `src/Tracker/EmbeddingsCalculator.hpp` и
+`CTracker::CalcEmbeddins` (`src/Tracker/BaseTracker.cpp`). Модели
+описываются `TrackerSettings::EmbeddingParams`, глобальная политика —
+`TrackerSettings::ReIdSettings`; INI-секции: `[reid]` и `[reid_<name>]`.
+
+* **Несколько моделей/типов.** Одна модель может обслуживать несколько
+  типов (например, `car/bus/truck/vehicle`), один тип — только одну модель.
+  Модели дедуплицируются по пути, input size, mean/std, channel order и
+  backend. Каждый эмбеддинг получает `modelId`; сравнение эмбеддингов разных
+  моделей запрещено.
+* **Препроцессинг.** `EmbeddingModelDesc` задаёт input size, per-channel
+  mean/std, `swapRB` и backend. `blobFromImages` строит батч, после чего
+  применяется `(x/255 - mean) / std`. Без этого OSNet/ResNet-эмбеддинги
+  заметно деградируют.
+* **Батч.** `CTracker` группирует кропы по `modelId` и вызывает
+  `EmbeddingsCalculator::Extract`; `max_batch` режет большие группы на чанки.
+  `EmbeddingsCalculator` сам откатывается на по-кроповый инференс, если
+  модель экспортирована с фиксированным batch (старый OSNet с
+  `Reshape [1, -1]`). Для OSNet используйте
+  `data/reid/osnet_x0_25_msmt17_batch.onnx` или
+  `tools/patch_reid_dynamic_batch.py`.
+* **GPU/CPU.** `backend = cuda_fp16` использует `DNN_BACKEND_CUDA` +
+  `DNN_TARGET_CUDA_FP16`, если OpenCV собран с CUDA; иначе — CPU с
+  предупреждением. На CPU действуют `cpu_max_objects` (при превышении ReID
+  для модели пропускается) и `cpu_interval` (ReID считается раз в N кадров).
+  GPU не throttle-ится.
+* **Галерея трека.** `CTrack` хранит ограниченную галерею последних
+  эмбеддингов (`gallery_size`), а не один последний вектор. `CalcCosine`
+  возвращает минимальное косинусное расстояние до галереи; пустой/некачественный
+  кроп не стирает историю. Обновление галереи проходит через quality gate
+  (`quality_gate`, `min_quality`); quality score учитывает размер кропа,
+  обрезание границей кадра, резкость и confidence детектора.
+* **Экспорт.** `res50_256x256.onnx` имеет dynamic batch и выход
+  `[N,1,2048]`; `EmbeddingsCalculator` приводит выход к `[N,D]` и
+  L2-нормализует каждую строку.
 
 ### 6.4 Решатели задачи назначения
 

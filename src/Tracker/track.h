@@ -21,6 +21,12 @@ struct RegionEmbedding
 {
     cv::Mat m_hist;
     cv::Mat m_embedding;
+
+    /// Id of the ReID model that produced m_embedding (-1 = no embedding).
+    int m_modelId = -1;
+
+    /// Cheap crop-quality score in [0, 1] used by the appearance gallery.
+    float m_quality = 0.0f;
 };
 
 ///
@@ -116,6 +122,13 @@ public:
     void Update(const CRegion& region, bool dataCorrect, double maxTraceLength, cv::UMat currFrame, double minStaticTime, int maxSpeedForStatic, time_point_t currTime);
     void Update(const CRegion& region, const RegionEmbedding& regionEmbedding, bool dataCorrect, double maxTraceLength, cv::UMat currFrame, double minStaticTime, int maxSpeedForStatic, time_point_t currTime);
 
+    ///
+    /// \brief SetAppearanceParams
+    /// Configure the appearance gallery: maximum number of embeddings kept per
+    /// track, whether low-quality crops may update it, and the quality threshold.
+    ///
+    void SetAppearanceParams(size_t gallerySize, bool qualityGate, float minQuality);
+
     bool IsStatic() const;
     bool IsStaticTimeout(time_point_t currTime, double staticPeriod) const;
     bool IsOutOfTheFrame() const;
@@ -191,6 +204,18 @@ private:
     void PointUpdate(const Point_t& pt, const cv::Size& newObjSize, float newAngle, bool dataCorrect, const cv::Size& frameSize);
 
     RegionEmbedding m_regionEmbedding;
+
+    // Bounded gallery of recent high-quality embeddings of this track. It is
+    // compared against the current observation by CalcCosine; a single last
+    // embedding is not representative enough for person/vehicle ReID.
+    std::deque<cv::Mat> m_embeddingGallery;
+    int m_embeddingModelId = -1;
+    int m_embeddingDim = 0;
+    size_t m_gallerySize = 15;
+    bool m_qualityGate = false;
+    float m_minQuality = 0.0f;
+
+    void AddEmbedding(const cv::Mat& embedding, int modelId, float quality);
 
     ///
     /// \brief CheckStatic

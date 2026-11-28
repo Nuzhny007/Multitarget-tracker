@@ -4,6 +4,7 @@ CMakeFiles
 CMakeCache.txt
 *.engine
 *.onnx
+!data/reid/osnet_x0_25_msmt17_batch.onnx
 *.weights
 *.pt
 *.pth

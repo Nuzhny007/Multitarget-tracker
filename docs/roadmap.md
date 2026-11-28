@@ -45,6 +45,15 @@
 > `2.0.0`); фаза 5 (TensorRT-слой) — опциональна. План и статус —
 > `docs/m2-refactoring-plan.md`.
 
+> **Дополнение (2026-11-28).** Пункт ReID этапа M3 закрыт: реестр
+> моделей/типов с per-model препроцессингом и INI-конфигом, GPU-батч
+> (OpenCV DNN CUDA) с CPU-fallback и бюджетом, галерея внешности трека с
+> quality gate. Модели: person OSNet + vehicle ResNet50
+> (`res50_256x256.onnx`). Детали — `docs/architecture.md` §6.3.1,
+> `docs/reid.md`. A/B на MOT20 train и VisDrone-MOT val — в `README.md`:
+> VisDrone ReID поднимает IDF1 0.196 → 0.300, но на MOT20 агрессивный
+> вес 0.5/0.5 ухудшает метрики; рабочая точка 0.2 ReID даёт 0.266 → 0.274.
+
 ## 1. Легенда приоритетов
 
 | Приоритет | Значение | Что делать |
@@ -240,7 +249,10 @@ M20–M23 и CMake-пакет исправлены 2026-11-15 — карточк
 - [x] Полноценная поддержка `FilterRRect` (включая acceleration/UKF)
       *(2026-11-19: linear CV/CA + UKF/AUKF, корректный угол, потерянные
       кадры, Mahalanobis; sensitivity-тесты — см. карточку в архиве)*.
-- [ ] ReID: несколько моделей/типов, батч-инференс, кэширование.
+- [x] ReID: несколько моделей/типов, батч-инференс, кэширование
+      *(2026-11-28: `[reid]`/`[reid_<name>]`, person OSNet + vehicle ResNet50,
+      CUDA FP16 batch, CPU budget, appearance gallery + quality gate; см.
+      `docs/reid.md` и `docs/architecture.md` §6.3.1)*.
 - [x] Метрики MOT (MOTA/IDF1/ID-switch) как отдельный инструмент
       *(2026-11-16: `tools/mot_eval` — CLEAR MOT + ID-меры, семантика
       py-motmetrics, кросс-чек и юнит-тесты — см. карточку в архиве и

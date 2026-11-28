@@ -30,6 +30,10 @@
 - `mtracking::tracking` namespace alias for the enums.
 - Shared helpers `src/util` (`mtutil::CreateLogger`, `mtutil::DefaultPalette`,
   `Frame`), used by the `example` and `async_detector` apps.
+- ReID (roadmap M3): per-type model registry (`[reid]` / `[reid_<name>]`),
+  person OSNet + vehicle ResNet50, per-model preprocessing and `modelId`,
+  batched OpenCV DNN inference on CUDA with CPU fallback budget, and a bounded
+  per-track appearance gallery with quality gating.
 
 ### Changed
 

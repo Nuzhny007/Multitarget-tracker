@@ -254,16 +254,72 @@ struct TrackerSettings : public DetectorSettings
     PostProcessSettings m_postProcessSettings;
 
     ///
+    /// \brief ReIdSettings
+    /// Global ReID settings (model registry, batch/GPU policy, track
+    /// appearance gallery). Filled from the [reid] section of the settings ini.
+    /// Per-model parameters live in EmbeddingParams / [reid_<name>] sections.
+    ///
+    struct ReIdSettings
+    {
+        /// Enable ReID. When false but m_embeddings is not empty (programmatic
+        /// configuration), the tracker still uses the configured models.
+        bool m_enable = false;
+
+        /// Preferred OpenCV DNN backend: "cuda_fp16", "cuda", "opencl" or "cpu".
+        /// CUDA is used when the current OpenCV build supports it; otherwise
+        /// the tracker falls back to CPU and logs a warning.
+        std::string m_backend = "cuda_fp16";
+
+        /// Upper bound of one inference call (per model). Larger batches are
+        /// split into chunks. On GPU 16-32 is usually a good value.
+        int m_maxBatch = 32;
+
+        /// Number of recent embeddings kept per track (appearance gallery).
+        int m_gallerySize = 15;
+
+        /// Update the gallery only when the crop quality is good enough.
+        bool m_qualityGate = true;
+
+        /// Minimum crop quality for a gallery update ([0, 1]).
+        float m_minQuality = 0.35f;
+
+        /// Minimal crop side in pixels; smaller crops get no embedding.
+        int m_minCropSide = 16;
+
+        /// CPU fallback budget: if a model runs on CPU and a frame has more
+        /// objects than this, ReID is skipped for that model/frame.
+        int m_cpuMaxObjects = 8;
+
+        /// CPU fallback: run ReID feature extraction every N-th frame
+        /// (1 = every frame). GPU runs are never throttled.
+        int m_cpuInterval = 5;
+
+        /// Run dummy batches after model initialization to trigger
+        /// CUDA/cuDNN autotuning and reduce the first-frame stall.
+        bool m_warmup = true;
+    };
+    ReIdSettings m_reidSettings;
+
+    ///
+    /// \brief EmbeddingParams
+    /// One ReID model and the object types it serves.
+    ///
     struct EmbeddingParams
     {
         ///
+        /// \brief m_name
+        /// Logical model name from the [reid_<name>] ini section.
+        ///
+        std::string m_name;
+
+        ///
         /// \brief m_embeddingCfgName
-        /// Neural network config file for embeddings
+        /// Neural network config file for embeddings (unused for ONNX).
         ///
         std::string m_embeddingCfgName;
         ///
         /// \brief m_embeddingWeightsName
-        /// Neural network weights file for embeddings
+        /// Neural network weights/model file for embeddings.
         ///
         std::string m_embeddingWeightsName;
 
@@ -273,6 +329,24 @@ struct TrackerSettings : public DetectorSettings
 		///
         std::vector<objtype_t> m_objectTypes;
 
+        /// Per-channel mean/std applied after scaling to [0, 1].
+        cv::Scalar m_mean{0, 0, 0};
+        cv::Scalar m_std{1, 1, 1};
+
+        /// Convert BGR (OpenCV) to RGB before inference.
+        bool m_swapRB = false;
+
+        /// Per-model batch limit; <= 0 means "use the global m_reidSettings value".
+        int m_maxBatch = 0;
+
+        /// Per-model backend; empty means "use the global m_reidSettings value".
+        std::string m_backend;
+
+        /// Per-model minimal crop side; <= 0 means "use the global value".
+        int m_minCropSide = 0;
+
+		EmbeddingParams() = default;
+
 		EmbeddingParams(const std::string& embeddingCfgName, const std::string& embeddingWeightsName,
             const cv::Size& inputLayer, const std::vector<objtype_t>& objectTypes)
 			: m_embeddingCfgName(embeddingCfgName),
@@ -280,7 +354,6 @@ struct TrackerSettings : public DetectorSettings
 			m_inputLayer(inputLayer),
 			m_objectTypes(objectTypes)
 		{
-			assert(!m_objectTypes.empty());
 		}
     };
 	///

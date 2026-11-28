@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fstream>
 #include <iostream>
 #include <vector>
 #include <map>
@@ -444,9 +445,55 @@ protected:
 				std::string pathToModel = "../data/";
 #endif
 
-				m_trackerSettings.m_embeddings.emplace_back(pathToModel + "reid/osnet_x0_25_msmt17.onnx", pathToModel + "reid/osnet_x0_25_msmt17.onnx",
+				// Prefer the dynamic-batch OSNet export. The original
+				// osnet_x0_25_msmt17.onnx has a fixed Reshape [1, -1] and
+				// silently falls back to one-crop-at-a-time inference.
+				std::string personModelPath = pathToModel + "reid/osnet_x0_25_msmt17_batch.onnx";
+				{
+					std::ifstream batchModel(personModelPath);
+					if (!batchModel.good())
+						personModelPath = pathToModel + "reid/osnet_x0_25_msmt17.onnx";
+				}
+
+				TrackerSettings::EmbeddingParams personParams(
+					personModelPath,
+					personModelPath,
 					cv::Size(128, 256),
-					std::vector<objtype_t>{ TypeConverter::Str2Type("person"), TypeConverter::Str2Type("car"), TypeConverter::Str2Type("bus"), TypeConverter::Str2Type("truck"), TypeConverter::Str2Type("vehicle") });
+					std::vector<objtype_t>{ TypeConverter::Str2Type("person") });
+				personParams.m_name = "person";
+				personParams.m_mean = cv::Scalar(0.485, 0.456, 0.406);
+				personParams.m_std = cv::Scalar(0.229, 0.224, 0.225);
+				personParams.m_swapRB = true;
+				personParams.m_maxBatch = 32;
+				personParams.m_backend = "cuda_fp16";
+				m_trackerSettings.m_embeddings.push_back(personParams);
+
+				TrackerSettings::EmbeddingParams vehicleParams(
+					pathToModel + "reid/res50_256x256.onnx",
+					pathToModel + "reid/res50_256x256.onnx",
+					cv::Size(256, 256),
+					std::vector<objtype_t>{
+						TypeConverter::Str2Type("car"),
+						TypeConverter::Str2Type("bus"),
+						TypeConverter::Str2Type("truck"),
+						TypeConverter::Str2Type("vehicle") });
+				vehicleParams.m_name = "vehicle";
+				// Confirm these values with the vehicle model exporter.
+				vehicleParams.m_mean = cv::Scalar(0.485, 0.456, 0.406);
+				vehicleParams.m_std = cv::Scalar(0.229, 0.224, 0.225);
+				vehicleParams.m_swapRB = true;
+				vehicleParams.m_maxBatch = 32;
+				vehicleParams.m_backend = "cuda_fp16";
+				m_trackerSettings.m_embeddings.push_back(vehicleParams);
+
+				m_trackerSettings.m_reidSettings.m_enable = true;
+				m_trackerSettings.m_reidSettings.m_backend = "cuda_fp16";
+				m_trackerSettings.m_reidSettings.m_maxBatch = 32;
+				m_trackerSettings.m_reidSettings.m_gallerySize = 15;
+				m_trackerSettings.m_reidSettings.m_qualityGate = true;
+				m_trackerSettings.m_reidSettings.m_minQuality = 0.35f;
+				m_trackerSettings.m_reidSettings.m_cpuMaxObjects = 8;
+				m_trackerSettings.m_reidSettings.m_cpuInterval = 5;
 
 				std::array<track_t, tracking::DistsCount> distType{
 					0.f,   // DistCenters

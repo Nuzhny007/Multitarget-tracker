@@ -101,6 +101,9 @@ CTrack::CTrack(const CRegion& region,
 {
 	//std::cout << "CTrack::CTrack2: m_predictionRect: " << m_predictionRect.center << ", " << m_predictionRect.angle << ", " << m_predictionRect.size << std::endl;
 
+    if (!regionEmbedding.m_embedding.empty())
+        AddEmbedding(regionEmbedding.m_embedding, regionEmbedding.m_modelId, regionEmbedding.m_quality);
+
 	switch (filterGoal)
 	{
 	case tracking::FilterGoal::FilterCenter:
@@ -260,23 +263,107 @@ track_t CTrack::CalcDistHist(const RegionEmbedding& embedding) const
 ///
 std::pair<track_t, bool> CTrack::CalcCosine(const RegionEmbedding& embedding) const
 {
-	track_t res = 1;
-	if (!embedding.m_embedding.empty() && !m_regionEmbedding.m_embedding.empty())
-	{
-        cv::Mat mul = embedding.m_embedding * m_regionEmbedding.m_embedding.t();
-        res = static_cast<track_t>(1.f - mul.at<float>(0, 0));
-        if (res < 0)
-            res = 0;
-        //std::cout << "CTrack::CalcCosine: " << embedding.m_embedding.size() << " - " << m_regionEmbedding.m_embedding.size() << " = " << res << std::endl;
-        return { res, true };
-	}
-    else
+    if (embedding.m_embedding.empty() || embedding.m_modelId < 0)
+        return { 0.f, false };
+
+    if (embedding.m_modelId != m_embeddingModelId)
+        return { 0.f, false };
+
+    const cv::Mat observation = embedding.m_embedding;
+    if (observation.type() != CV_32F || observation.total() == 0)
+        return { 0.f, false };
+
+    auto Distance = [&observation](const cv::Mat& reference, track_t& distance) -> bool
     {
-        //assert(0);
-        //CV_Assert(!embedding.m_embedding.empty());
-        //CV_Assert(!m_regionEmbedding.m_embedding.empty());
-        return { (track_t)0, false };
+        if (reference.empty() || reference.type() != CV_32F ||
+            reference.total() != observation.total() ||
+            observation.rows != 1 || reference.rows != 1 ||
+            !observation.isContinuous() || !reference.isContinuous())
+        {
+            return false;
+        }
+
+        const int dim = static_cast<int>(observation.total());
+        const float* lhs = observation.ptr<float>(0);
+        const float* rhs = reference.ptr<float>(0);
+        float dot = 0.f;
+        for (int i = 0; i < dim; ++i)
+            dot += lhs[i] * rhs[i];
+
+        distance = 1.f - dot;
+        if (distance < 0.f)
+            distance = 0.f;
+        if (distance > 2.f)
+            distance = 2.f;
+        return true;
+    };
+
+    track_t best = 2.f;
+    bool found = false;
+    for (const cv::Mat& reference : m_embeddingGallery)
+    {
+        track_t distance = 0.f;
+        if (Distance(reference, distance))
+        {
+            best = std::min(best, distance);
+            found = true;
+        }
     }
+
+    // The gallery may be empty when the first crops were rejected by the
+    // quality gate; fall back to the last accepted embedding.
+    if (!found && m_regionEmbedding.m_modelId == embedding.m_modelId)
+    {
+        track_t distance = 0.f;
+        if (Distance(m_regionEmbedding.m_embedding, distance))
+        {
+            best = distance;
+            found = true;
+        }
+    }
+
+    if (!found)
+        return { 0.f, false };
+    return { best, true };
+}
+
+///
+/// \brief CTrack::AddEmbedding
+/// Add an embedding to the bounded appearance gallery. A model change resets
+/// the gallery: embeddings from different networks are not comparable.
+///
+void CTrack::AddEmbedding(const cv::Mat& embedding, int modelId, float quality)
+{
+    if (embedding.empty() || embedding.type() != CV_32F || embedding.total() == 0)
+        return;
+
+    if (modelId != m_embeddingModelId ||
+        (m_embeddingDim > 0 && embedding.total() != static_cast<size_t>(m_embeddingDim)))
+    {
+        m_embeddingGallery.clear();
+        m_embeddingModelId = modelId;
+        m_embeddingDim = static_cast<int>(embedding.total());
+    }
+
+    if (m_qualityGate && quality < m_minQuality)
+        return;
+
+    m_embeddingGallery.push_back(embedding.clone());
+    while (m_embeddingGallery.size() > std::max<size_t>(1, m_gallerySize))
+        m_embeddingGallery.pop_front();
+}
+
+///
+/// \brief CTrack::SetAppearanceParams
+///
+void CTrack::SetAppearanceParams(size_t gallerySize, bool qualityGate, float minQuality)
+{
+    m_gallerySize = std::max<size_t>(1, gallerySize);
+    m_qualityGate = qualityGate;
+    m_minQuality = std::max(0.f, std::min(1.f, minQuality));
+
+    while (m_embeddingGallery.size() > m_gallerySize)
+        m_embeddingGallery.pop_front();
 }
 
 ///
@@ -372,7 +459,28 @@ void CTrack::Update(const CRegion& region,
                     double minStaticTime, int maxSpeedForStatic,
                     time_point_t currTime)
 {
-    m_regionEmbedding = regionEmbedding;
+    // Update the histogram and the current embedding independently: a missing
+    // or rejected ReID embedding must not erase the track's appearance history.
+    if (!regionEmbedding.m_hist.empty())
+        m_regionEmbedding.m_hist = regionEmbedding.m_hist;
+
+    if (!regionEmbedding.m_embedding.empty())
+    {
+        if (regionEmbedding.m_modelId != m_embeddingModelId)
+        {
+            m_embeddingGallery.clear();
+            m_embeddingModelId = regionEmbedding.m_modelId;
+            m_embeddingDim = static_cast<int>(regionEmbedding.m_embedding.total());
+            m_regionEmbedding.m_embedding.release();
+        }
+
+        m_regionEmbedding.m_embedding = regionEmbedding.m_embedding;
+        m_regionEmbedding.m_modelId = regionEmbedding.m_modelId;
+        m_regionEmbedding.m_quality = regionEmbedding.m_quality;
+
+        if (dataCorrect)
+            AddEmbedding(regionEmbedding.m_embedding, regionEmbedding.m_modelId, regionEmbedding.m_quality);
+    }
 
 	switch (m_filterGoal)
 	{

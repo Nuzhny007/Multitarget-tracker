@@ -22,6 +22,37 @@
 - RF-DETR detector works with TensorRT! Export pre-trained PyTorch models [here (roboflow/rf-detr)](https://github.com/roboflow/rf-detr) to ONNX format and run Multitarget-tracker with `-e=3` example
 - YOLOv12 detector works with TensorRT! Export pre-trained PyTorch models [here (sunsmarterjie/yolov12)](https://github.com/sunsmarterjie/yolov12) to ONNX format and run Multitarget-tracker with `-e=3` example
 
+## ReID benchmark
+
+A/B on **MOT20 train** (4 sequences, 8931 frames) and **VisDrone-MOT2019 val**
+(7 sequences, 2846 frames). Both runs use the same TensorRT detector and the
+same **UniversalTracker**; only ReID settings differ. ByteTrack does not use
+ReID, so it is not part of this A/B. MOT20 uses the person OSNet model;
+VisDrone uses person OSNet + vehicle ResNet50.
+
+Metrics are from `mot_eval` (CLEAR MOT + ID measures); timing includes frame
+reading, detection, tracking, ReID and result writing. Hardware: RTX 4070
+Laptop, TensorRT 10.16, OpenCV 4.14 CUDA FP16.
+
+| Dataset | ReID config | MOTA | IDF1 | IDSW | FP | FN | Recall | ms/frame |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| MOT20 | off (IoU only) | 0.181 | 0.266 | 4786 | 110005 | 814420 | 0.282 | 33.6 |
+| MOT20 | 0.5 IoU / 0.5 ReID, gallery 15 | 0.111 | 0.136 | 10329 | 50597 | 947346 | 0.165 | 78.4 |
+| MOT20 | 0.8 IoU / 0.2 ReID, gallery 5 | **0.188** | **0.274** | **4493** | **96435** | 820714 | 0.277 | 76.4 |
+| VisDrone | off (IoU only) | -1.913 | 0.196 | 4758 | 288279 | 39376 | 0.655 | 57.8 |
+| VisDrone | 0.5 IoU / 0.5 ReID, gallery 15 | **-0.583** | **0.300** | **2432** | **130698** | 47545 | 0.583 | 427.6 |
+
+**How to read it.** On MOT20 the aggressive `0.5/0.5` ReID setting is
+harmful: it cuts FP but also cuts recall and more than doubles IDSW. Lowering
+the ReID weight to `0.2` and reducing the gallery to 5 (`min_quality=0.5`)
+recovers a small gain over IoU-only. On VisDrone ReID reduces FP/IDSW and
+improves MOTA/IDF1, but recall drops and the run is about 7x slower. VisDrone
+MOTA is negative because the detector finds many objects that are not annotated
+in the GT; compare IDF1/IDSW/FP/FN rather than MOTA alone.
+
+ReID is disabled by default. The detailed settings, model preprocessing and
+interpretation are in [docs/reid.md](docs/reid.md).
+
 ## Demo Videos
 
 ### Detection & Tracking
