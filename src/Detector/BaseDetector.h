@@ -340,3 +340,12 @@ protected:
 private:
     std::vector<objtype_t> m_typesMap;
 };
+
+///
+/// \brief Namespace facade (roadmap M2, phase 6): new code can refer to
+/// `mtracking::BaseDetector`; the global name stays for compatibility.
+///
+namespace mtracking
+{
+using ::BaseDetector;
+}

@@ -45,6 +45,7 @@ set(public_headers
              trajectory.h
              ../mtracking/DetectorSettings.h
              ../mtracking/Export.h
+             ../mtracking/Mtracking.h
              ../mtracking/defines.h
              ../mtracking/object_types.h)
 

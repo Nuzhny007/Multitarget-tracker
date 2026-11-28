@@ -40,10 +40,12 @@
 > M3 (копирование траекторий в `GetTracks`) остаётся открытым: корректный
 > фикс требует смены публичного типа на `shared_ptr<const Trace>`.
 >
-> **Дополнение (2026-11-27).** Начат этап M2: выполнены фазы 1–4
+> **Дополнение (2026-11-28).** M2: выполнены фазы 1–4 и шаг 1 фазы 6
 > (`DetectorSettings` + версия схемы INI; реестры детекторов/трекеров;
-> публичный API/install-граница + `MT_API`; общие утилиты `src/util`).
-> План по фазам и статус — `docs/m2-refactoring-plan.md`.
+> публичный API/install + `MT_API`; общие утилиты `src/util`; переходный
+> `namespace mtracking` + semver 1.2.0). Фаза 5 (TensorRT-слой) — опциональна;
+> полный перенос определений в namespace и explicit exports — в 2.0.
+> План и статус — `docs/m2-refactoring-plan.md`.
 
 ## 1. Легенда приоритетов
 
@@ -211,17 +213,25 @@ M20–M23 и CMake-пакет исправлены 2026-11-15 — карточк
       `object_types.h`, `Export.h`; detector: `BaseDetector.h`), внутренние не
       устанавливаются; `MT_API` введён; consumer-тест (static) проходит
       (2026-11-27, фаза 3).
+- [x] `namespace mtracking` (переходный фасад `mtracking/Mtracking.h`:
+      `mtracking::<Type>` при сохранении глобальных имён) + semver
+      `1.2.0`/`CHANGELOG.md`; consumer с `mtracking::` проходит
+      (2026-11-28, фаза 6, шаг 1).
 - [ ] Explicit exports (`MT_API` = `dllexport`/`dllimport`) и отказ от
-      `WINDOWS_EXPORT_ALL_SYMBOLS`; `namespace mtracking` + семантическое
-      версионирование (фаза 6, нужна shared-сборка и breaking-ветка).
+      `WINDOWS_EXPORT_ALL_SYMBOLS`; перенос определений в `namespace mtracking`
+      (2.0, breaking; нужна shared-сборка и отдельная ветка).
 - [x] Вынести общие утилиты в `src/util` (`mtutil::CreateLogger`,
       `mtutil::DefaultPalette`, `Frame`); `example`/`async_detector`
       используют их, дублирование удалено; тайминги остаются в приложениях
       (у sync/async разная семантика). 2026-11-27, фаза 4.
 - [x] Реестр детекторов/трекеров вместо `switch`: `RegisterDetector`/
       `RegisterTracker` + таблицы фабрик (2026-11-27, фаза 2).
-- [ ] TensorRT-слой: абстракция над версиями TensorRT, вынести
-      `common/` из репозитория или зафиксировать как submodule.
+- [ ] **Опционально** — TensorRT-слой: `common/` — вендорный код NVIDIA
+      (38 файлов, Apache-2.0), уже изолирован в `yolo_rt_lib`; 70 из 74
+      `NV_TENSORRT_MAJOR` — в нём, в нашем коде 4 ветки `< 8`. Вынос в
+      `thirdparty/`/submodule — лицензионная гигиена, не архитектура;
+      версионная абстракция не нужна, пока поддерживается одна версия TRT.
+      Решение: опционально (2026-11-28).
 - [x] Python: pybind11 v2.11+, numpy-владение, `pyproject.toml`,
       типизация/докстринги *(2026-11-19: pybind11 2.13.6 vendored; кастер
       `cv::Mat` копирует данные в обе стороны границы; `pymtracking.pyi`
