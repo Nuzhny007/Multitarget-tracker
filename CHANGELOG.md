@@ -1,6 +1,22 @@
 # Changelog
 
-## 1.2.0 (2026-11-28)
+## 2.0.0 (2026-11-28)
+
+### Breaking
+
+- The public types are now defined in `namespace mtracking`:
+  `mtracking::BaseTracker`, `mtracking::BaseDetector`, `mtracking::TrackerSettings`,
+  `mtracking::DetectorSettings`, `mtracking::TrackingObject`, `mtracking::Trace`,
+  `mtracking::TrajectoryPoint`, `mtracking::CRegion`, `mtracking::TrackID`,
+  `mtracking::track_id_t`, `mtracking::objtype_t`, `mtracking::bad_type`,
+  `mtracking::TypeConverter`, `mtracking::ParseTrackerSettings`.
+- Global aliases with the old names are kept for source compatibility and are
+  deprecated; they will be removed in 3.0. New code should include
+  `mtracking/Mtracking.h` (and `mdetection/BaseDetector.h`) and use the
+  `mtracking::` names.
+- Explicit `MT_API` exports (`dllexport`/`dllimport`); `MT_SHARED_EXPORTS` is
+  defined by the library targets and `MT_SHARED` is propagated to consumers.
+  `CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS` is no longer used.
 
 ### Added
 
@@ -11,11 +27,7 @@
   `kTrackerSettingsSchemaVersion` constant.
 - Detector/tracker factories: `BaseDetector::RegisterDetector` /
   `BaseTracker::RegisterTracker` (registry instead of a hard-coded switch).
-- `MT_API` decoration in `mtracking/Export.h` and a public/installed header
-  boundary.
-- `mtracking` namespace facade (`mtracking/Mtracking.h`): the public types are
-  also available as `mtracking::<Type>`; `mdetection/BaseDetector.h` adds
-  `mtracking::BaseDetector`.
+- `mtracking::tracking` namespace alias for the enums.
 - Shared helpers `src/util` (`mtutil::CreateLogger`, `mtutil::DefaultPalette`,
   `Frame`), used by the `example` and `async_detector` apps.
 
@@ -29,12 +41,6 @@
   now visible to the caller).
 - `TrackerSettings` no longer defaults `m_detectorBackend` to TensorRT; the
   default is `DNN_OCV` (H21).
-
-### Deprecated
-
-- The global-namespace public types are kept for source compatibility; the
-  definitions move into `namespace mtracking` in 2.0. New code should prefer
-  `#include "mtracking/Mtracking.h"` and the `mtracking::` names.
 
 ### Fixed
 

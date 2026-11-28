@@ -19,6 +19,9 @@ namespace fs = std::filesystem;
 // ---------------------------------------------------------------------------
 //
 // ---------------------------------------------------------------------------
+namespace mtracking
+{
+
 typedef float track_t;
 typedef cv::Point_<track_t> Point_t;
 #define El_t CV_32F
@@ -68,18 +71,24 @@ public:
 };
 
 typedef TrackID<size_t> track_id_t;
+
+} // namespace mtracking
+
 namespace std
 {
   template <>
-  struct hash<track_id_t>
+  struct hash<mtracking::track_id_t>
   {
-    std::size_t operator()(const track_id_t& k) const
+    std::size_t operator()(const mtracking::track_id_t& k) const
     {
-      return std::hash<track_id_t::value_type>()(k.m_val);
+      return std::hash<mtracking::track_id_t::value_type>()(k.m_val);
     }
   };
 
 }
+
+namespace mtracking
+{
 
 ///
 /// \brief config_t
@@ -355,6 +364,27 @@ inline void DrawFilledRect(cv::Mat& frame, const cv::Rect& rect, cv::Scalar cl, 
 ///
 ///
 ///
+
+} // namespace mtracking
+
+// Backward-compatible global names (roadmap M2, 2.0): the definitions live in
+// `mtracking`; the global aliases keep existing code compiling.
+using mtracking::track_t;
+using mtracking::Point_t;
+using mtracking::assignments_t;
+using mtracking::distMatrix_t;
+using mtracking::time_point_t;
+using mtracking::TrackID;
+using mtracking::track_id_t;
+using mtracking::config_t;
+using mtracking::CRegion;
+using mtracking::regions_t;
+using mtracking::sqr;
+using mtracking::distance;
+using mtracking::Clamp;
+using mtracking::SaveMat;
+using mtracking::DrawFilledRect;
+
 namespace tracking
 {
 ///

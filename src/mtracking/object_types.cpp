@@ -1,5 +1,8 @@
 #include "object_types.h"
 
+namespace mtracking
+{
+
 std::vector<std::string> TypeConverter::m_typeNames =
 {
     "person",
@@ -91,3 +94,5 @@ std::string TypeConverter::m_badTypeName = "unknown";
 // Guards AddNewType so explicit registration from several initializers
 // cannot corrupt the registry (roadmap H22).
 std::mutex TypeConverter::m_mutex;
+
+} // namespace mtracking

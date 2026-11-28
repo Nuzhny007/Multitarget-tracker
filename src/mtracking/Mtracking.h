@@ -1,12 +1,11 @@
 #pragma once
 
 ///
-/// \brief Umbrella header for the `mtracking` namespace facade.
+/// \brief Umbrella header for the `mtracking` public API (2.0).
 ///
-/// The public types are still defined in the global namespace for source
-/// compatibility; this header exposes them as `mtracking::<Type>` so new code
-/// can use the namespace ahead of the 2.0 move of the definitions
-/// (roadmap M2, phase 6).
+/// The public types are defined in `namespace mtracking`; global aliases keep
+/// existing code compiling. This header also exposes `mtracking::tracking` for
+/// the enums (the enums themselves stay in the global `tracking` namespace).
 ///
 /// The detector factory is exposed as `mtracking::BaseDetector` by
 /// `mdetection/BaseDetector.h`.
@@ -21,18 +20,4 @@
 namespace mtracking
 {
 namespace tracking = ::tracking;
-
-using ::BaseTracker;
-using ::CRegion;
-using ::DetectorSettings;
-using ::ParseTrackerSettings;
-using ::TrackID;
-using ::TrackerSettings;
-using ::TrackingObject;
-using ::Trace;
-using ::TrajectoryPoint;
-using ::TypeConverter;
-using ::bad_type;
-using ::objtype_t;
-using ::track_id_t;
-} // namespace mtracking
+}

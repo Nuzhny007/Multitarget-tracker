@@ -790,6 +790,9 @@ void RegisterBuiltinTrackers()
 }
 } // namespace
 
+namespace mtracking
+{
+
 ///
 /// \brief RegisterTracker
 /// \param trackerType
@@ -816,3 +819,5 @@ std::unique_ptr<BaseTracker> BaseTracker::CreateTracker(const TrackerSettings& s
     }
     return it->second(settings, fps);
 }
+
+} // namespace mtracking

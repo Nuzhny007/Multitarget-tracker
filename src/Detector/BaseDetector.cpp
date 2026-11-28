@@ -63,6 +63,9 @@ void RegisterBuiltinDetectors()
 }
 } // namespace
 
+namespace mtracking
+{
+
 ///
 /// \brief RegisterDetector
 /// \param detectorType
@@ -117,3 +120,5 @@ std::unique_ptr<BaseDetector> BaseDetector::CreateDetectorKV(tracking::Detectors
     cv::UMat uframe = gray.getUMat(cv::ACCESS_READ);
     return CreateDetector(detectorType, mconfig, uframe);
 }
+
+} // namespace mtracking

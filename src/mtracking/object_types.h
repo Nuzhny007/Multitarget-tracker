@@ -4,9 +4,6 @@
 #include <vector>
 #include <iostream>
 
-typedef int objtype_t;
-constexpr objtype_t bad_type = -1;
-
 // The registry lives in its own (optionally shared) library, so its static
 // data members must be explicitly imported/exported on Windows (roadmap M21).
 #if defined(_WIN32) && defined(MT_CORE_SHARED)
@@ -18,6 +15,12 @@ constexpr objtype_t bad_type = -1;
 #else
 #  define MT_CORE_API
 #endif
+
+namespace mtracking
+{
+
+typedef int objtype_t;
+constexpr objtype_t bad_type = -1;
 
 ///
 /// \brief Global registry of object type names.
@@ -103,3 +106,11 @@ private:
 	static MT_CORE_API std::string m_badTypeName;
 	static MT_CORE_API std::mutex m_mutex;
 };
+
+} // namespace mtracking
+
+// Backward-compatible global names (roadmap M2, 2.0): the definitions live in
+// `mtracking`; the global aliases keep existing code compiling.
+using mtracking::TypeConverter;
+using mtracking::bad_type;
+using mtracking::objtype_t;

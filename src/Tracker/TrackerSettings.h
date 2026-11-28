@@ -6,6 +6,9 @@
 #include "defines.h"
 #include "DetectorSettings.h"
 
+namespace mtracking
+{
+
 ///
 /// \brief Current INI schema version understood by ParseTrackerSettings.
 /// Bump when the ini keys/sections change incompatibly.
@@ -382,3 +385,10 @@ struct TrackerSettings : public DetectorSettings
 
 ///
 MT_API bool ParseTrackerSettings(const std::string& settingsFile, TrackerSettings& trackerSettings);
+
+} // namespace mtracking
+
+// Backward-compatible global names (roadmap M2, 2.0).
+using mtracking::kTrackerSettingsSchemaVersion;
+using mtracking::ParseTrackerSettings;
+using mtracking::TrackerSettings;

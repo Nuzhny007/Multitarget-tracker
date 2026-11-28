@@ -2,6 +2,9 @@
 #include "TrackerSettings.h"
 #include <inih/INIReader.h>
 
+namespace mtracking
+{
+
 namespace
 {
 ///
@@ -169,3 +172,5 @@ bool ParseTrackerSettings(const std::string& settingsFile, TrackerSettings& trac
     std::cout << "ParseTrackerSettings: " << res << std::endl;
     return res;
 }
+
+} // namespace mtracking

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(MTTracking VERSION 1.2.0)
+project(MTTracking VERSION 2.0.0)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -23,11 +23,9 @@ else()
     set(MT_LIBRARY_TYPE STATIC)
 endif()
 
-if (MT_SHARED AND MSVC)
-    # mtracking/mdetection have no MT_API export macros yet, so let CMake
-    # export every symbol of the shared libraries (roadmap M21).
-    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-endif()
+# MT_SHARED: public symbols are exported explicitly with MT_API
+# (MT_SHARED_EXPORTS for the library targets, MT_SHARED for consumers);
+# CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS is no longer used (roadmap M2, 2.0).
 
 find_package(Threads REQUIRED)
 find_package(OpenMP)

@@ -64,6 +64,11 @@ include_directories(${PROJECT_SOURCE_DIR}/..)
 add_library(${PROJECT_NAME} ${MT_LIBRARY_TYPE}
 	${detector_sources})
 
+if (MT_SHARED)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE MT_SHARED_EXPORTS)
+    target_compile_definitions(${PROJECT_NAME} INTERFACE MT_SHARED)
+endif()
+
 # OpenCV types appear in the public headers, so it is a PUBLIC dependency;
 # the threading/OpenMP runtimes and yolo_rt_lib stay private (roadmap M21, M22).
 target_link_libraries(${PROJECT_NAME}

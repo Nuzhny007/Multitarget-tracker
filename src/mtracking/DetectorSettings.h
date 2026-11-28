@@ -5,6 +5,9 @@
 
 #include "defines.h"
 
+namespace mtracking
+{
+
 ///
 /// \brief Detector-specific settings.
 ///
@@ -84,3 +87,8 @@ struct DetectorSettings
     // For TensorRT optimization, bytes
     size_t m_maxVideoMemory = 0;
 };
+
+} // namespace mtracking
+
+// Backward-compatible global name (roadmap M2, 2.0).
+using mtracking::DetectorSettings;

@@ -2,6 +2,9 @@
 #include <vector>
 #include "defines.h"
 
+namespace mtracking
+{
+
 ///
 /// \brief The TrajectoryPoint struct
 ///
@@ -430,3 +433,10 @@ struct TrackingObject
         return m_rrect.boundingRect();
     }
 };
+
+} // namespace mtracking
+
+// Backward-compatible global names (roadmap M2, 2.0).
+using mtracking::TrajectoryPoint;
+using mtracking::Trace;
+using mtracking::TrackingObject;

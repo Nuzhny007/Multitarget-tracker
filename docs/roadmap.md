@@ -40,12 +40,10 @@
 > M3 (копирование траекторий в `GetTracks`) остаётся открытым: корректный
 > фикс требует смены публичного типа на `shared_ptr<const Trace>`.
 >
-> **Дополнение (2026-11-28).** M2: выполнены фазы 1–4 и шаг 1 фазы 6
-> (`DetectorSettings` + версия схемы INI; реестры детекторов/трекеров;
-> публичный API/install + `MT_API`; общие утилиты `src/util`; переходный
-> `namespace mtracking` + semver 1.2.0). Фаза 5 (TensorRT-слой) — опциональна;
-> полный перенос определений в namespace и explicit exports — в 2.0.
-> План и статус — `docs/m2-refactoring-plan.md`.
+> **Дополнение (2026-11-28).** M2 завершён: фазы 1–4 и 6 (2.0: перенос
+> определений в `namespace mtracking` + explicit `MT_API` exports + semver
+> `2.0.0`); фаза 5 (TensorRT-слой) — опциональна. План и статус —
+> `docs/m2-refactoring-plan.md`.
 
 ## 1. Легенда приоритетов
 
@@ -213,13 +211,11 @@ M20–M23 и CMake-пакет исправлены 2026-11-15 — карточк
       `object_types.h`, `Export.h`; detector: `BaseDetector.h`), внутренние не
       устанавливаются; `MT_API` введён; consumer-тест (static) проходит
       (2026-11-27, фаза 3).
-- [x] `namespace mtracking` (переходный фасад `mtracking/Mtracking.h`:
-      `mtracking::<Type>` при сохранении глобальных имён) + semver
-      `1.2.0`/`CHANGELOG.md`; consumer с `mtracking::` проходит
-      (2026-11-28, фаза 6, шаг 1).
-- [ ] Explicit exports (`MT_API` = `dllexport`/`dllimport`) и отказ от
-      `WINDOWS_EXPORT_ALL_SYMBOLS`; перенос определений в `namespace mtracking`
-      (2.0, breaking; нужна shared-сборка и отдельная ветка).
+- [x] `namespace mtracking` (2.0): определения публичных типов перенесены в
+      `mtracking`, глобальные имена сохранены как deprecated-алиасы; explicit
+      `MT_API` (`dllexport`/`dllimport`), `WINDOWS_EXPORT_ALL_SYMBOLS` больше
+      не используется; semver `2.0.0`/`CHANGELOG.md`; static и shared сборки,
+      consumer с `mtracking::` проходят (2026-11-28, фаза 6).
 - [x] Вынести общие утилиты в `src/util` (`mtutil::CreateLogger`,
       `mtutil::DefaultPalette`, `Frame`); `example`/`async_detector`
       используют их, дублирование удалено; тайминги остаются в приложениях

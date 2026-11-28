@@ -4,9 +4,7 @@
 риску и зависимостям. Каждая фаза заканчивается зелёной сборкой (и, где можно,
 smoke-прогоном), чтобы рефакторинг можно было останавливать после любой фазы.
 
-> **Статус (2026-11-28):** фазы 1–4 выполнены; фаза 5 — опционально;
-> фаза 6 — шаг 1 (переходные `mtracking::` алиасы + semver/CHANGELOG);
-> перенос определений в `namespace mtracking` и explicit exports — в 2.0.
+> **Статус (2026-11-28):** фазы 1–4 и 6 выполнены; фаза 5 — опционально.
 
 ## Фаза 1. Разделение конфигов и версия схемы INI (M2.1)
 
@@ -125,12 +123,12 @@ smoke-прогоном), чтобы рефакторинг можно было �
 
 **Риск:** высокий (breaking API) — делать в отдельной ветке/мажорном релизе.
 
-> **Статус (2026-11-28):** шаг 1 выполнен — `mtracking/Mtracking.h` с
-> переходными `using`-алиасами (`mtracking::BaseTracker`, `TrackerSettings`,
-> `TrackingObject`, `CRegion`, …), `mtracking::tracking` для enum'ов,
-> `MTTracking 1.2.0` + `CHANGELOG.md`; consumer с `mtracking::` собран и
-> запущен (`EXIT=0`). Отложено (2.0): перенос определений в namespace,
-> explicit `MT_API` exports/отказ от `WINDOWS_EXPORT_ALL_SYMBOLS`.
+> **Статус (2026-11-28):** выполнено (2.0) — определения публичных типов
+> перенесены в `namespace mtracking`, глобальные имена оставлены как
+> deprecated-алиасы; explicit `MT_API` (`MT_SHARED_EXPORTS`/`MT_SHARED`),
+> `WINDOWS_EXPORT_ALL_SYMBOLS` отключён; `MTTracking 2.0.0` + `CHANGELOG.md`.
+> Проверено: static и shared сборки, consumer с `mtracking::` и глобальными
+> именами, `-e=1` и `AsyncDetector` — `EXIT=0`.
 
 ## Порядок и критерии остановки
 

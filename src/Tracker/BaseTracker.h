@@ -7,6 +7,9 @@
 #include "trajectory.h"
 #include "TrackerSettings.h"
 
+namespace mtracking
+{
+
 ///
 /// \brief The CTracker class
 ///
@@ -61,3 +64,8 @@ public:
     ///
     static std::unique_ptr<BaseTracker> CreateTracker(const TrackerSettings& settings, float fps);
 };
+
+} // namespace mtracking
+
+// Backward-compatible global name (roadmap M2, 2.0).
+using mtracking::BaseTracker;
